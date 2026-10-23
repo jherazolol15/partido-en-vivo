@@ -128,6 +128,7 @@ window.claude = { use: async name => { await ready; return { db, user, assets, m
 window.cerrarSesion = () => signOut(auth).then(() => location.reload());
 
 function gate(html) {
+  window.__booted = true;
   let el = document.getElementById("gate");
   if (!el) { el = document.createElement("div"); el.id = "gate"; document.body.appendChild(el); }
   el.innerHTML = html; el.hidden = !html;

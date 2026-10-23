@@ -6,6 +6,27 @@
 <link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 <script>window.__ready=new Promise(function(r){window.__setReady=r});window.claude={use:function(n){return window.__ready.then(function(c){return c.use(n)})}};</script>
+<script>
+window.__errs=[];
+addEventListener("error",function(e){__errs.push((e.message||"error")+" ("+String(e.filename||"").split("/").pop()+")")});
+addEventListener("unhandledrejection",function(e){var r=e.reason;__errs.push(String(r&&(r.code||r.message)||r))});
+setTimeout(function(){
+  if(window.__booted)return;
+  var t=(__errs.join(" | ")||"Firebase no respondió").replace(/[<>&]/g,"");
+  var d=document.createElement("div");
+  d.innerHTML='<div style="position:fixed;inset:0;z-index:200;background:#0b1714;color:#e8f3ef;display:grid;place-items:center;padding:24px;font:16px system-ui,sans-serif"><div style="max-width:420px;text-align:center"><h2 style="margin:0 0 8px">La app no terminó de iniciar</h2><p style="color:#93b0a8;font-size:14px">Detalle: '+t+'</p><button id="pevFix" style="width:100%;min-height:50px;border:0;border-radius:12px;background:#2fbf7a;color:#04140d;font-weight:700;font-size:16px">Reparar y recargar</button></div></div>';
+  document.body.appendChild(d);
+  document.getElementById("pevFix").onclick=async function(){
+    this.textContent="Reparando…";
+    try{
+      if(navigator.serviceWorker){var rs=await navigator.serviceWorker.getRegistrations();for(var i=0;i<rs.length;i++)await rs[i].unregister();}
+      if(window.caches){var ks=await caches.keys();for(var j=0;j<ks.length;j++)await caches.delete(ks[j]);}
+      if(indexedDB.databases){var dbs=await indexedDB.databases();dbs.forEach(function(x){if(x.name&&x.name.indexOf("firestore")>=0)indexedDB.deleteDatabase(x.name)});}
+    }catch(e){}
+    location.reload();
+  };
+},15000);
+</script>
 <script type="module" src="adapter.js"></script>
 </head><body>
 <title>Partido en vivo · Jaguares de Córdoba</title>
