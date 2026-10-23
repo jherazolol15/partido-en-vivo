@@ -2,7 +2,7 @@
 // usando Firebase (Auth + Firestore con caché sin conexión) y el puente Apps Script de la hoja.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDFiL86Q7K5LICO7UNY1xJTnHLcyQ9aJ-c",
@@ -14,7 +14,7 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({ forceOwnership: true }) }) });
+const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
 const mapErr = e => {
   const c = e && e.code || "";
@@ -144,19 +144,32 @@ onAuthStateChanged(auth, async u => {
     return;
   }
   me = u;
-  try { await getDoc(doc(fs, "config", "plantilla")); }
+  const key = "pev:role:" + u.uid;
+  let cached = null; try { cached = JSON.parse(localStorage.getItem(key) || "null"); } catch (e) {}
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r({ code: "timeout" }), ms))]);
+  let done = false;
+  const finish = () => {
+    if (done) return; done = true;
+    if (owner) onSnapshot(doc(fs, "config", "hoja"), s => { hoja = s.exists() ? s.data() : {}; }, () => {});
+    watchBlobs(); gate(""); resolveReady();
+    if (window.__setReady) window.__setReady(window.claude);
+  };
+  const denied = () => card(`<h2>Acceso pendiente</h2><p class="hint">La cuenta <strong>${u.email}</strong> no está autorizada. Pide al DT que la agregue en Ajustes → Asistentes.</p><button class="btn wide" onclick="cerrarSesion()">Usar otra cuenta</button>`);
+  // Con un rol ya conocido en este teléfono, la app abre al instante (también sin señal) y se verifica en segundo plano.
+  if (cached) { owner = !!cached.owner; finish(); }
+  else gate(card(`<h2>Conectando…</h2><p class="hint">Verificando tu acceso con ${u.email}.</p>`));
+  try { await withTimeout(getDoc(doc(fs, "config", "plantilla")), 12000); }
   catch (e) {
-    if (e && e.code === "permission-denied") {
-      gate(card(`<h2>Acceso pendiente</h2><p class="hint">La cuenta <strong>${u.email}</strong> no está autorizada. Pide al DT que la agregue en Ajustes → Asistentes.</p><button class="btn wide" onclick="cerrarSesion()">Usar otra cuenta</button>`));
-      return;
-    }
+    if (e && e.code === "permission-denied") { try { localStorage.removeItem(key); } catch (x) {} done = true; gate(denied()); return; }
+    if (!cached) gate(card(`<h2>Sin conexión</h2><p class="hint">La primera vez la app necesita señal para verificar tu acceso. Conéctate y vuelve a intentar.</p><button class="btn pri wide" onclick="location.reload()">Reintentar</button>`));
+    return;
   }
-  try { await getDoc(doc(fs, "config", "hoja")); owner = true; } catch (e) { owner = false; }
-  if (owner) onSnapshot(doc(fs, "config", "hoja"), s => { hoja = s.exists() ? s.data() : {}; }, () => {});
-  watchBlobs();
-  gate("");
-  resolveReady();
-  if (window.__setReady) window.__setReady(window.claude);
+  let isOwner = false, sure = true;
+  try { await withTimeout(getDoc(doc(fs, "config", "hoja")), 12000); isOwner = true; }
+  catch (e) { if (!(e && e.code === "permission-denied")) { sure = false; isOwner = cached ? !!cached.owner : false; } }
+  if (sure) try { localStorage.setItem(key, JSON.stringify({ owner: isOwner })); } catch (x) {}
+  if (!done) { owner = isOwner; finish(); }
+  else if (sure && isOwner !== owner) location.reload();
 });
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
