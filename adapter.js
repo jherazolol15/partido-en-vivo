@@ -2,7 +2,7 @@
 // usando Firebase (Auth + Firestore con caché sin conexión) y el puente Apps Script de la hoja.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+import { initializeFirestore, memoryLocalCache, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDFiL86Q7K5LICO7UNY1xJTnHLcyQ9aJ-c",
@@ -14,7 +14,7 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const fs = initializeFirestore(app, { experimentalForceLongPolling: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+const fs = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, localCache: memoryLocalCache() });
 
 const mapErr = e => {
   const c = e && e.code || "";
@@ -26,10 +26,12 @@ const wrapDoc = s => ({ id: s.id, exists: s.exists(), data: () => s.data(), meta
 const wrapQuery = q => ({ docs: q.docs.map(wrapDoc), size: q.size, empty: q.empty, metadata: q.metadata });
 const segs = p => p.split("/");
 // Escrituras: sin señal se confirman al instante (Firestore las guarda y envía después).
+// Escrituras: sin señal o sin confirmación se reportan como "unavailable" para que la app las conserve en su cola y reintente.
 const write = p => {
   const guarded = p.catch(e => { throw mapErr(e); });
-  if (!navigator.onLine) { guarded.catch(err => console.warn("Escritura pendiente falló", err)); return Promise.resolve(); }
-  return Promise.race([guarded, new Promise(r => setTimeout(r, 8000))]);
+  guarded.catch(err => console.warn("Escritura", err));
+  if (!navigator.onLine) return Promise.reject({ code: "unavailable", message: "Sin señal" });
+  return Promise.race([guarded, new Promise((_, r) => setTimeout(() => r({ code: "unavailable", message: "Sin confirmación" }), 15000))]);
 };
 
 // Escucha en vivo con respaldo: si el canal en vivo no entrega datos en 6 s, o falla, se consulta cada 20 s.
@@ -72,11 +74,13 @@ function colRef(path) {
 const db = { doc: docRef, collection: colRef };
 
 // ---- Fotos guardadas en Firestore (colección blobs) ----
-const blobs = {};
+let blobs = {};
+try { blobs = JSON.parse(localStorage.getItem("pev:blobs") || "{}"); } catch (e) {}
+const saveBlobs = () => { try { localStorage.setItem("pev:blobs", JSON.stringify(blobs)); } catch (e) {} };
 window.blobUrl = id => blobs[id] || "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
 function watchBlobs() {
   const ref = collection(fs, "blobs");
-  const apply = q => { q.docs.forEach(d => { blobs[d.id] = d.data().data; }); if (typeof window.render === "function") try { window.render(); } catch (e) {} };
+  const apply = q => { q.docs.forEach(d => { blobs[d.id] = d.data().data; }); saveBlobs(); if (typeof window.render === "function") try { window.render(); } catch (e) {} };
   live(ref, apply, () => getDocs(ref).then(apply), null, "blobs");
 }
 const assets = {

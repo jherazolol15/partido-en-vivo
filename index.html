@@ -445,7 +445,7 @@ async function setMatch(patch){
   if(!S.db)return;
   const ref=S.db.doc("partidos/"+S.mid);
   try{await ref.update(patch)}catch(e){
-    try{if(e&&e.code==="invalid_argument")await ref.set(S.match);else throw e}catch(e2){toast("No se pudo guardar: revisa la conexión.")}
+    try{if(e&&e.code==="invalid_argument")await ref.set(S.match);else throw e}catch(e2){toast("Guardado en este teléfono; se enviará al recuperar señal.")}
   }
 }
 
