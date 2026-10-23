@@ -32,6 +32,22 @@ const write = p => {
   return Promise.race([guarded, new Promise(r => setTimeout(r, 8000))]);
 };
 
+// Escucha en vivo con respaldo: si el canal en vivo no entrega datos en 6 s, o falla, se consulta cada 20 s.
+function report(path, e) {
+  const m = "Datos (" + path + "): " + ((e && e.code) || "error");
+  (window.__errs = window.__errs || []).push(m); console.warn(m, e);
+}
+function live(ref, onData, poll, err, path) {
+  let got = false, timer = null, stopped = false;
+  const tick = () => { if (stopped || got) return; poll().catch(e => report(path, e)).finally(() => { if (!stopped && !got) timer = setTimeout(tick, 20000); }); };
+  const unsub = onSnapshot(ref, x => { got = true; if (timer) clearTimeout(timer); onData(x); }, e => {
+    report(path, e); got = false;
+    if (e && e.code === "permission-denied") { err && err(mapErr(e)); return; }
+    if (!stopped) timer = setTimeout(tick, 1000);
+  });
+  timer = setTimeout(tick, 6000);
+  return () => { stopped = true; if (timer) clearTimeout(timer); unsub(); };
+}
 function docRef(path) {
   const ref = doc(fs, ...segs(path));
   return {
@@ -40,7 +56,7 @@ function docRef(path) {
     set: d => write(setDoc(ref, d)),
     update: d => write(updateDoc(ref, d)),
     delete: () => write(deleteDoc(ref)),
-    onSnapshot: (next, err) => onSnapshot(ref, s => next(wrapDoc(s)), e => err && err(mapErr(e))),
+    onSnapshot: (next, err) => live(ref, s => next(wrapDoc(s)), () => getDoc(ref).then(s => next(wrapDoc(s))), err, path),
     collection: sub => colRef(path + "/" + sub)
   };
 }
@@ -50,7 +66,7 @@ function colRef(path) {
     path,
     doc: id => docRef(path + "/" + (id || Math.random().toString(36).slice(2) + Date.now().toString(36))),
     get: () => getDocs(ref).then(wrapQuery).catch(e => { throw mapErr(e); }),
-    onSnapshot: (next, err) => onSnapshot(ref, q => next(wrapQuery(q)), e => err && err(mapErr(e)))
+    onSnapshot: (next, err) => live(ref, q => next(wrapQuery(q)), () => getDocs(ref).then(q => next(wrapQuery(q))), err, path)
   };
 }
 const db = { doc: docRef, collection: colRef };
@@ -59,10 +75,9 @@ const db = { doc: docRef, collection: colRef };
 const blobs = {};
 window.blobUrl = id => blobs[id] || "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
 function watchBlobs() {
-  onSnapshot(collection(fs, "blobs"), q => {
-    q.docs.forEach(d => { blobs[d.id] = d.data().data; });
-    if (typeof window.render === "function") try { window.render(); } catch (e) {}
-  }, () => {});
+  const ref = collection(fs, "blobs");
+  const apply = q => { q.docs.forEach(d => { blobs[d.id] = d.data().data; }); if (typeof window.render === "function") try { window.render(); } catch (e) {} };
+  live(ref, apply, () => getDocs(ref).then(apply), null, "blobs");
 }
 const assets = {
   upload: (blob, opt) => new Promise((res, rej) => {
