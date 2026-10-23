@@ -40,7 +40,7 @@ function report(path, e) {
 function live(ref, onData, poll, err, path) {
   let got = false, timer = null, stopped = false;
   const tick = () => { if (stopped || got) return; poll().catch(e => report(path, e)).finally(() => { if (!stopped && !got) timer = setTimeout(tick, 20000); }); };
-  const unsub = onSnapshot(ref, x => { got = true; if (timer) clearTimeout(timer); onData(x); }, e => {
+  const unsub = onSnapshot(ref, x => { onData(x); if (x.metadata && x.metadata.fromCache) return; got = true; if (timer) clearTimeout(timer); }, e => {
     report(path, e); got = false;
     if (e && e.code === "permission-denied") { err && err(mapErr(e)); return; }
     if (!stopped) timer = setTimeout(tick, 1000);
