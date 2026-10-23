@@ -14,7 +14,7 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+const fs = initializeFirestore(app, { experimentalForceLongPolling: true, localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
 const mapErr = e => {
   const c = e && e.code || "";
@@ -159,10 +159,10 @@ onAuthStateChanged(auth, async u => {
   // Con un rol ya conocido en este teléfono, la app abre al instante (también sin señal) y se verifica en segundo plano.
   if (cached) { owner = !!cached.owner; finish(); }
   else gate(card(`<h2>Conectando…</h2><p class="hint">Verificando tu acceso con ${u.email}.</p>`));
-  try { await withTimeout(getDoc(doc(fs, "config", "plantilla")), 12000); }
+  try { await withTimeout(getDoc(doc(fs, "config", "plantilla")), 25000); }
   catch (e) {
     if (e && e.code === "permission-denied") { try { localStorage.removeItem(key); } catch (x) {} done = true; gate(denied()); return; }
-    if (!cached) gate(card(`<h2>Sin conexión</h2><p class="hint">La primera vez la app necesita señal para verificar tu acceso. Conéctate y vuelve a intentar.</p><button class="btn pri wide" onclick="location.reload()">Reintentar</button>`));
+    if (!cached) gate(card(`<h2>Sin conexión</h2><p class="hint">La primera vez la app necesita señal para verificar tu acceso. Conéctate y vuelve a intentar.</p><p class="hint" style="font-size:.8rem">Detalle: ${String((e && (e.code + " " + (e.message || ""))) || e).replace(/[<>&]/g, "").slice(0, 160)} · ${navigator.onLine ? "en línea" : "sin red"}</p><button class="btn pri wide" onclick="location.reload()">Reintentar</button><button class="btn wide" style="margin-top:8px" onclick="cerrarSesion()">Cerrar sesión</button>`));
     return;
   }
   let isOwner = false, sure = true;
