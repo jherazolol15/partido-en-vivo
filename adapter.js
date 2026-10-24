@@ -1,7 +1,7 @@
 // Adaptador v2: ofrece a la app la misma interfaz que claude.ai (db, user, assets, mcp, downloads)
 // usando Firebase (Auth + Firestore con caché sin conexión) y el puente Apps Script de la hoja.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
 import { initializeFirestore, memoryLocalCache, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -13,7 +13,8 @@ const firebaseConfig = {
   appId: "1:76175390113:web:1a9d089cbee86f7b7907e0"
 };
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// Sin el resolvedor de ventanas al iniciar: en la app instalada ese paso puede quedarse esperando.
+const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
 const fs = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, localCache: memoryLocalCache() });
 
 const mapErr = e => {
@@ -154,12 +155,16 @@ function gate(html) {
 }
 const card = inner => `<div style="position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;padding:24px"><div class="sec" style="max-width:420px;width:100%;text-align:center">${inner}</div></div>`;
 
+function alertGate(e) { const el = document.getElementById("gate"); if (el) { const p = el.querySelector(".hint"); if (p) p.textContent = "No se pudo iniciar sesión: " + ((e && e.code) || e) + ". Intenta de nuevo."; } }
+let authFired = false;
+setTimeout(() => { if (!authFired) { window.__errs = window.__errs || []; window.__errs.push("La sesión de Google no respondió"); } }, 10000);
 onAuthStateChanged(auth, async u => {
+  authFired = true;
   if (!u) {
     gate(card(`<h2>Partido en vivo</h2><p class="hint">Jaguares de Córdoba · Sub-15 A. Entra con la cuenta de Google que autorizó el DT.</p><button class="btn pri wide" id="btnLogin">Entrar con Google</button>`));
     document.getElementById("btnLogin").onclick = async () => {
       const p = new GoogleAuthProvider();
-      try { await signInWithPopup(auth, p); } catch (e) { if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) signInWithRedirect(auth, p); }
+      try { await signInWithPopup(auth, p, browserPopupRedirectResolver); } catch (e) { if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment" || e.code === "auth/cancelled-popup-request")) signInWithRedirect(auth, p, browserPopupRedirectResolver); else alertGate(e); }
     };
     return;
   }
