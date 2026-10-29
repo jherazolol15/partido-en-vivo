@@ -1,133 +1,235 @@
-// Adaptador v2: ofrece a la app la misma interfaz que claude.ai (db, user, assets, mcp, downloads)
-// usando Firebase (Auth + Firestore con caché sin conexión) y el puente Apps Script de la hoja.
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserPopupRedirectResolver, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
-import { initializeFirestore, memoryLocalCache, doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDFiL86Q7K5LICO7UNY1xJTnHLcyQ9aJ-c",
-  authDomain: "partido-en-vivo-jaguares.firebaseapp.com",
-  projectId: "partido-en-vivo-jaguares",
-  storageBucket: "partido-en-vivo-jaguares.firebasestorage.app",
-  messagingSenderId: "76175390113",
-  appId: "1:76175390113:web:1a9d089cbee86f7b7907e0"
+// Adaptador v2.1: ofrece a la app la misma interfaz que claude.ai (db, user, assets, mcp, downloads)
+// usando el puente Apps Script como base de datos. Todo se guarda primero en el teléfono.
+const LSK = "pev3:";
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem(LSK + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(LSK + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  del(k) { try { localStorage.removeItem(LSK + k); } catch (e) {} }
 };
-const app = initializeApp(firebaseConfig);
-// Sin el resolvedor de ventanas al iniciar: en la app instalada ese paso puede quedarse esperando.
-const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
-const fs = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, localCache: memoryLocalCache() });
+const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
-const mapErr = e => {
-  const c = e && e.code || "";
-  if (c === "permission-denied" || c === "not-found" || c === "invalid-argument" || c === "failed-precondition") return { code: "invalid_argument", message: e.message };
-  if (c === "resource-exhausted") return { code: "resource_exhausted", message: e.message };
-  return { code: "unavailable", message: (e && e.message) || String(e) };
-};
-const wrapDoc = s => ({ id: s.id, exists: s.exists(), data: () => s.data(), metadata: s.metadata });
-const wrapQuery = q => ({ docs: q.docs.map(wrapDoc), size: q.size, empty: q.empty, metadata: q.metadata });
-const segs = p => p.split("/");
-// Escrituras: sin señal se confirman al instante (Firestore las guarda y envía después).
-// Escrituras: sin señal o sin confirmación se reportan como "unavailable" para que la app las conserve en su cola y reintente.
-const write = p => {
-  const guarded = p.catch(e => { throw mapErr(e); });
-  guarded.catch(err => console.warn("Escritura", err));
-  if (!navigator.onLine) return Promise.reject({ code: "unavailable", message: "Sin señal" });
-  return Promise.race([guarded, new Promise((_, r) => setTimeout(() => r({ code: "unavailable", message: "Sin confirmación" }), 15000))]);
-};
-
-// Escucha en vivo con respaldo: si el canal en vivo no entrega datos en 6 s, o falla, se consulta cada 20 s.
-function report(path, e) {
-  const m = "Datos (" + path + "): " + ((e && e.code) || "error");
-  (window.__errs = window.__errs || []).push(m); console.warn(m, e);
+// ---------- Configuración de acceso ----------
+let cfg = ls.get("cfg", null); // {url, clave, rol, uid, nombre}
+function leerInvitacion() {
+  const h = location.hash || "";
+  const m = /#inv=([^&]+)/.exec(h);
+  if (!m) return null;
+  try { const o = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); history.replaceState(null, "", location.pathname); return o; } catch (e) { return null; }
 }
-function live(ref, onData, poll, err, path) {
-  let got = false, timer = null, stopped = false;
-  const tick = () => { if (stopped || got) return; poll().catch(e => report(path, e)).finally(() => { if (!stopped && !got) timer = setTimeout(tick, 20000); }); };
-  const unsub = onSnapshot(ref, x => { onData(x); if (x.metadata && x.metadata.fromCache) return; got = true; if (timer) clearTimeout(timer); }, e => {
-    report(path, e); got = false;
-    if (e && e.code === "permission-denied") { err && err(mapErr(e)); return; }
-    if (!stopped) timer = setTimeout(tick, 1000);
-  });
-  timer = setTimeout(tick, 6000);
-  return () => { stopped = true; if (timer) clearTimeout(timer); unsub(); };
+
+// ---------- Llamadas al puente ----------
+async function puente(body, timeoutMs) {
+  if (!cfg) throw { code: "not_granted", message: "Sin acceso configurado" };
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs || 30000);
+  let r;
+  try { r = await fetch(cfg.url, { method: "POST", body: JSON.stringify(Object.assign({ clave: cfg.clave }, body)), signal: ctl.signal, redirect: "follow" }).then(x => x.json()); }
+  catch (e) { throw { code: "server_unavailable", message: "El puente no respondió", retryable: true }; }
+  finally { clearTimeout(t); }
+  if (!r.ok) throw { code: r.error === "clave_incorrecta" ? "needs_reauth" : (r.error || "tool_error"), message: r.detalle || r.error };
+  return r;
+}
+
+// ---------- Copia local (espejo) y cola de envío ----------
+let mirror = ls.get("mirror", {});      // ruta -> {data, actualizado}
+let since = ls.get("since", 0);
+let outbox = ls.get("outbox", []);     // [{id, tipo, ruta, data, uid}]
+const saveMirror = () => { if (!ls.set("mirror", mirror)) console.warn("Espejo demasiado grande"); ls.set("since", since); };
+const saveOutbox = () => ls.set("outbox", outbox);
+const isObj = v => v && typeof v === "object" && !Array.isArray(v);
+const merge = (a, b) => { const r = Object.assign({}, a); for (const k in b) r[k] = isObj(b[k]) && isObj(r[k]) ? merge(r[k], b[k]) : b[k]; return r; };
+const clone = v => v == null ? v : JSON.parse(JSON.stringify(v));
+
+function applyOp(base, op) {
+  if (op.tipo === "set") return clone(op.data);
+  if (op.tipo === "update") return base == null ? base : merge(base, clone(op.data));
+  return null;
+}
+// Estado visible = servidor + operaciones pendientes encima
+function view(ruta) {
+  let d = mirror[ruta] ? clone(mirror[ruta].data) : null;
+  for (const op of outbox) if (op.ruta === ruta) d = applyOp(d, op);
+  return d;
+}
+function allPaths() {
+  const s = new Set(Object.keys(mirror));
+  outbox.forEach(o => s.add(o.ruta));
+  return [...s];
+}
+
+// ---------- Suscripciones ----------
+const subs = new Set(); // {kind:'doc'|'col', path, cb}
+function parentOf(p) { return p.split("/").slice(0, -1).join("/"); }
+function notify(paths) {
+  const set = new Set(paths);
+  for (const s of subs) {
+    if (s.kind === "doc" ? set.has(s.path) : [...set].some(p => parentOf(p) === s.path)) fire(s);
+  }
+  if (window.__outboxChanged) try { window.__outboxChanged(); } catch (e) {}
+}
+function docSnap(path) { const d = view(path); return { id: path.split("/").pop(), exists: d != null, data: () => clone(d), metadata: { fromCache: false, hasPendingWrites: outbox.some(o => o.ruta === path) } }; }
+function colSnap(path) {
+  const docs = allPaths().filter(p => parentOf(p) === path).sort().map(docSnap).filter(s => s.exists);
+  return { docs, size: docs.length, empty: !docs.length, metadata: { fromCache: false } };
+}
+function fire(s) { try { s.cb(s.kind === "doc" ? docSnap(s.path) : colSnap(s.path)); } catch (e) { console.error(e); } }
+
+// ---------- API db ----------
+function enqueue(tipo, ruta, data) {
+  if (ruta.split("/").length % 2) return Promise.reject({ code: "invalid_argument", message: "Ruta inválida" });
+  if (tipo === "update" && view(ruta) == null) return Promise.reject({ code: "invalid_argument", message: "El documento no existe" });
+  outbox.push({ id: rid(), tipo, ruta, data: clone(data), uid: cfg && cfg.uid });
+  saveOutbox(); notify([ruta]); kick();
+  return Promise.resolve();
 }
 function docRef(path) {
-  const ref = doc(fs, ...segs(path));
   return {
-    id: ref.id, path,
-    get: () => getDoc(ref).then(wrapDoc).catch(e => { throw mapErr(e); }),
-    set: d => write(setDoc(ref, d)),
-    update: d => write(updateDoc(ref, d)),
-    delete: () => write(deleteDoc(ref)),
-    onSnapshot: (next, err) => live(ref, s => next(wrapDoc(s)), () => getDoc(ref).then(s => next(wrapDoc(s))), err, path),
+    id: path.split("/").pop(), path,
+    get: async () => docSnap(path),
+    set: d => enqueue("set", path, d),
+    update: d => enqueue("update", path, d),
+    delete: () => enqueue("delete", path, null),
+    onSnapshot: cb => { const s = { kind: "doc", path, cb }; subs.add(s); setTimeout(() => fire(s), 0); return () => subs.delete(s); },
     collection: sub => colRef(path + "/" + sub)
   };
 }
 function colRef(path) {
-  const ref = collection(fs, ...segs(path));
   return {
     path,
-    doc: id => docRef(path + "/" + (id || Math.random().toString(36).slice(2) + Date.now().toString(36))),
-    get: () => getDocs(ref).then(wrapQuery).catch(e => { throw mapErr(e); }),
-    onSnapshot: (next, err) => live(ref, q => next(wrapQuery(q)), () => getDocs(ref).then(q => next(wrapQuery(q))), err, path)
+    doc: id => docRef(path + "/" + (id || rid())),
+    get: async () => colSnap(path),
+    onSnapshot: cb => { const s = { kind: "col", path, cb }; subs.add(s); setTimeout(() => fire(s), 0); return () => subs.delete(s); }
   };
 }
 const db = { doc: docRef, collection: colRef };
 
-// ---- Fotos guardadas en Firestore (colección blobs) ----
-let blobs = {};
-try { blobs = JSON.parse(localStorage.getItem("pev:blobs") || "{}"); } catch (e) {}
-const saveBlobs = () => { try { localStorage.setItem("pev:blobs", JSON.stringify(blobs)); } catch (e) {} };
-window.blobUrl = id => blobs[id] || "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
-function watchBlobs() {
-  const ref = collection(fs, "blobs");
-  const apply = q => { q.docs.forEach(d => { blobs[d.id] = d.data().data; }); saveBlobs(); if (typeof window.render === "function") try { window.render(); } catch (e) {} };
-  live(ref, apply, () => getDocs(ref).then(apply), null, "blobs");
+// ---------- Ciclo de sincronización ----------
+let syncing = false, lastOk = 0, lastErr = null;
+async function sync() {
+  if (syncing || !cfg || !navigator.onLine) return;
+  syncing = true;
+  try {
+    // 1. Enviar pendientes (de a 20)
+    while (outbox.length) {
+      const lote = outbox.slice(0, 20);
+      const r = await puente({ op: "escribir", ops: lote.map(o => ({ id: o.id, tipo: o.tipo, ruta: o.ruta, data: o.data, uid: o.uid })) });
+      const res = {}; (r.resultados || []).forEach(x => res[x.id] = x);
+      const tocadas = [];
+      outbox = outbox.filter(o => {
+        const x = res[o.id]; if (!x) return true;
+        tocadas.push(o.ruta);
+        if (!x.ok) { console.warn("Rechazado por el puente", o, x.error); reportar("No se guardó un cambio: " + x.error); }
+        else { mirror[o.ruta] = { data: applyOp(mirror[o.ruta] ? mirror[o.ruta].data : null, o), actualizado: x.actualizado }; if (mirror[o.ruta].data == null) delete mirror[o.ruta]; }
+        return false;
+      });
+      saveOutbox(); saveMirror(); notify(tocadas);
+    }
+    // 2. Recibir cambios
+    const r = await puente({ op: "cambios", desde: since });
+    const tocadas = [];
+    (r.docs || []).forEach(d => {
+      if (d.borrado) delete mirror[d.ruta]; else mirror[d.ruta] = { data: d.data, actualizado: d.actualizado };
+      since = Math.max(since, d.actualizado); tocadas.push(d.ruta);
+    });
+    if (tocadas.length) { saveMirror(); notify(tocadas); }
+    lastOk = Date.now(); lastErr = null;
+    pedirFotos();
+  } catch (e) {
+    lastErr = e;
+    if (e && e.code === "needs_reauth") { cfg = null; ls.del("cfg"); location.reload(); }
+  } finally { syncing = false; if (window.__outboxChanged) try { window.__outboxChanged(); } catch (e) {} }
+}
+let kickT = null;
+function kick() { clearTimeout(kickT); kickT = setTimeout(sync, 300); }
+setInterval(() => { if (document.visibilityState === "visible") sync(); }, 4000);
+addEventListener("online", kick);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") kick(); });
+window.__outboxCount = () => outbox.length;
+window.__estadoSync = () => ({ pendientes: outbox.length, ultimo: lastOk, error: lastErr && lastErr.code });
+function reportar(m) { (window.__errs = window.__errs || []).push(m); if (typeof window.toast === "function") try { window.toast(m); } catch (e) {} }
+
+// ---------- Fotos: IndexedDB en el teléfono + carpeta privada en Drive ----------
+const fotos = {};
+let idb = null;
+function abrirIDB() {
+  return new Promise(res => {
+    try {
+      const rq = indexedDB.open("pev3-fotos", 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore("f");
+      rq.onsuccess = () => { idb = rq.result; res(); };
+      rq.onerror = () => res();
+    } catch (e) { res(); }
+  });
+}
+function idbAll() {
+  return new Promise(res => {
+    if (!idb) return res();
+    try {
+      const tx = idb.transaction("f", "readonly"); const st = tx.objectStore("f"); const rq = st.openCursor();
+      rq.onsuccess = () => { const c = rq.result; if (c) { fotos[c.key] = c.value; c.continue(); } else res(); };
+      rq.onerror = () => res();
+    } catch (e) { res(); }
+  });
+}
+function idbPut(id, v) { try { idb && idb.transaction("f", "readwrite").objectStore("f").put(v, id); } catch (e) {} }
+function idbDel(id) { try { idb && idb.transaction("f", "readwrite").objectStore("f").delete(id); } catch (e) {} }
+const PIXEL = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+const faltan = new Set();
+window.blobUrl = id => { if (!id) return PIXEL; if (fotos[id]) return fotos[id]; faltan.add(id); return PIXEL; };
+let pidiendo = false;
+async function pedirFotos() {
+  if (pidiendo || !faltan.size || !navigator.onLine || !cfg) return;
+  pidiendo = true;
+  try {
+    const ids = [...faltan].filter(id => !fotos[id]).slice(0, 10);
+    if (!ids.length) { faltan.clear(); return; }
+    const r = await puente({ op: "fotoLeer", ids }, 60000);
+    ids.forEach(id => faltan.delete(id));
+    let nuevas = 0;
+    for (const id in (r.fotos || {})) { fotos[id] = r.fotos[id]; idbPut(id, r.fotos[id]); nuevas++; }
+    if (nuevas && typeof window.render === "function") try { window.render(); } catch (e) {}
+    if (faltan.size) setTimeout(pedirFotos, 500);
+  } catch (e) {} finally { pidiendo = false; }
 }
 const assets = {
   upload: (blob, opt) => new Promise((res, rej) => {
     const fr = new FileReader();
     fr.onload = async () => {
-      const id = Math.random().toString(36).slice(2) + Date.now().toString(36);
-      const data = fr.result;
-      if (data.length > 950000) { rej({ code: "too_large", message: "Imagen demasiado grande" }); return; }
-      try { await write(setDoc(doc(fs, "blobs", id), { data, type: (opt && opt.type) || blob.type, ts: Date.now() })); blobs[id] = data; res({ id, url: data, sizeBytes: data.length, contentType: (opt && opt.type) || blob.type }); }
-      catch (e) { rej(e); }
+      const id = rid(); const data = fr.result;
+      try { await puente({ op: "fotoGuardar", id, data }, 90000); fotos[id] = data; idbPut(id, data); res({ id, url: data, sizeBytes: data.length, contentType: (opt && opt.type) || blob.type }); }
+      catch (e) { rej(e.code === "server_unavailable" ? { code: "server_unavailable", message: "Sin señal: sube la foto cuando tengas conexión" } : e); }
     };
     fr.onerror = () => rej({ code: "read_error" });
     fr.readAsDataURL(blob);
   }),
-  delete: id => write(deleteDoc(doc(fs, "blobs", id))).then(() => { delete blobs[id]; return { deleted: true }; }),
-  list: async () => ({ assets: Object.keys(blobs).map(id => ({ id })), usage: {} })
+  delete: async id => { await puente({ op: "fotoBorrar", id }); delete fotos[id]; idbDel(id); return { deleted: true }; },
+  list: async () => ({ assets: Object.keys(fotos).map(id => ({ id })), usage: {} })
 };
 
-// ---- Puente con la hoja (Apps Script) ----
-let hoja = {};
+// ---------- Conexión con la hoja Plantilla (solo DT) ----------
 const toBridgeValue = v => {
   if (typeof v === "string") { const m = /^=DATE\((\d+);(\d+);(\d+)\)$/.exec(v); if (m) return { fecha: m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0") }; }
   return v;
 };
 const mcp = {
   async callTool(server, tool, input) {
-    if (!hoja.puenteUrl || !hoja.clave) throw { code: "server_not_connected", message: "Configura la conexión con tu hoja en Ajustes." };
     if (!navigator.onLine) throw { code: "server_unavailable", message: "Sin señal", retryable: true };
-    const body = { clave: hoja.clave, sheetId: input.spreadsheetId || "", range: input.range };
+    const body = { sheetId: input.spreadsheetId || "", range: input.range };
     if (tool === "get_values") body.op = "get";
     else if (tool === "update_values") { body.op = "set"; body.values = (input.values || []).map(r => r.map(toBridgeValue)); }
     else throw { code: "bad_request", message: "Operación no soportada" };
-    let r;
-    try { r = await fetch(hoja.puenteUrl, { method: "POST", body: JSON.stringify(body) }).then(x => x.json()); }
-    catch (e) { throw { code: "server_unavailable", message: "La hoja no respondió", retryable: true }; }
-    if (!r.ok) throw { code: r.error === "clave_incorrecta" ? "needs_reauth" : "tool_error", message: r.detalle || r.error };
+    const r = await puente(body, 60000);
     return { payload: r.values ? { values: r.values } : {}, content: [] };
   }
 };
-window.probarPuente = async (url, clave) => {
-  const r = await fetch(url, { method: "POST", body: JSON.stringify({ clave, op: "ping" }) }).then(x => x.json());
-  return r;
+window.probarPuente = async (url, clave) => fetch(url, { method: "POST", body: JSON.stringify({ clave, op: "ping" }) }).then(x => x.json());
+window.invitacionAsistente = async () => {
+  const r = await puente({ op: "invitacion" });
+  const tok = btoa(unescape(encodeURIComponent(JSON.stringify({ url: cfg.url, clave: r.claveAsistente }))));
+  return location.origin + location.pathname + "#inv=" + encodeURIComponent(tok);
 };
 
-// ---- Descargas ----
+// ---------- Descargas ----------
 const downloads = {
   save: async ({ filename, data }) => {
     const blob = data instanceof Blob ? data : new Blob([data]);
@@ -137,64 +239,55 @@ const downloads = {
   }
 };
 
-// ---- Sesión y roles ----
-let resolveReady; const ready = new Promise(r => resolveReady = r);
-let me = null, owner = false;
+// ---------- Usuario ----------
 const user = {
-  isOwner: async () => owner, canEdit: async () => owner, can: async () => null,
-  id: async () => me && me.uid, me: async () => ({ id: me && me.uid, name: (me && me.displayName) || "", email: me && me.email, isOwner: owner, canEdit: owner })
+  isOwner: async () => !!cfg && cfg.rol === "dt", canEdit: async () => !!cfg && cfg.rol === "dt", can: async () => null,
+  id: async () => cfg && cfg.uid, me: async () => ({ id: cfg && cfg.uid, name: (cfg && cfg.nombre) || "", isOwner: !!cfg && cfg.rol === "dt" })
 };
-window.claude = { use: async name => { await ready; return { db, user, assets, mcp, downloads }[name] || null; } };
-window.cerrarSesion = () => signOut(auth).then(() => location.reload());
+const api = { use: async name => ({ db, user, assets, mcp, downloads })[name] || null };
+window.cerrarSesion = () => { ls.del("cfg"); ls.del("mirror"); ls.del("since"); location.reload(); };
 
+// ---------- Pantalla de acceso ----------
 function gate(html) {
   window.__booted = true;
   let el = document.getElementById("gate");
   if (!el) { el = document.createElement("div"); el.id = "gate"; document.body.appendChild(el); }
   el.innerHTML = html; el.hidden = !html;
 }
-const card = inner => `<div style="position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;padding:24px"><div class="sec" style="max-width:420px;width:100%;text-align:center">${inner}</div></div>`;
-
-function alertGate(e) { const el = document.getElementById("gate"); if (el) { const p = el.querySelector(".hint"); if (p) p.textContent = "No se pudo iniciar sesión: " + ((e && e.code) || e) + ". Intenta de nuevo."; } }
-let authFired = false;
-setTimeout(() => { if (!authFired) { window.__errs = window.__errs || []; window.__errs.push("La sesión de Google no respondió"); } }, 10000);
-onAuthStateChanged(auth, async u => {
-  authFired = true;
-  if (!u) {
-    gate(card(`<h2>Partido en vivo</h2><p class="hint">Jaguares de Córdoba · Sub-15 A. Entra con la cuenta de Google que autorizó el DT.</p><button class="btn pri wide" id="btnLogin">Entrar con Google</button>`));
-    document.getElementById("btnLogin").onclick = async () => {
-      const p = new GoogleAuthProvider();
-      try { await signInWithPopup(auth, p, browserPopupRedirectResolver); } catch (e) { if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment" || e.code === "auth/cancelled-popup-request")) signInWithRedirect(auth, p, browserPopupRedirectResolver); else alertGate(e); }
-    };
-    return;
-  }
-  me = u;
-  const key = "pev:role:" + u.uid;
-  let cached = null; try { cached = JSON.parse(localStorage.getItem(key) || "null"); } catch (e) {}
-  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r({ code: "timeout" }), ms))]);
-  let done = false;
-  const finish = () => {
-    if (done) return; done = true;
-    if (owner) onSnapshot(doc(fs, "config", "hoja"), s => { hoja = s.exists() ? s.data() : {}; }, () => {});
-    watchBlobs(); gate(""); resolveReady();
-    if (window.__setReady) window.__setReady(window.claude);
+const card = inner => `<div style="position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;padding:24px;overflow:auto"><div class="sec" style="max-width:440px;width:100%">${inner}</div></div>`;
+async function entrar(url, clave, nombre) {
+  const r = await fetch(url, { method: "POST", body: JSON.stringify({ clave, op: "quien" }) }).then(x => x.json());
+  if (!r.ok) throw new Error(r.error === "clave_incorrecta" ? "La clave no es correcta." : "El puente respondió con un error: " + (r.detalle || r.error));
+  const prev = ls.get("cfg", null);
+  cfg = { url, clave, rol: r.rol, uid: (prev && prev.uid) || ("u_" + rid()), nombre: nombre || "" };
+  ls.set("cfg", cfg);
+}
+function pantallaAcceso(pre, msg) {
+  gate(card(`<h2 style="text-align:center">Partido en vivo</h2><p class="hint" style="text-align:center">Jaguares de Córdoba · Sub-15 A</p>
+    ${msg ? `<div class="banner err">${msg}</div>` : ""}
+    <label class="f">URL del puente<input id="accUrl" value="${(pre && pre.url) || ""}" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <label class="f">Clave<input id="accClave" type="password" value="${(pre && pre.clave) || ""}" autocomplete="off"></label>
+    <label class="f">Tu nombre<input id="accNombre" value="${(pre && pre.nombre) || ""}" placeholder="Ej. Juan Pablo"></label>
+    <button class="btn pri wide" id="accBtn">Entrar</button>`));
+  document.getElementById("accBtn").onclick = async e => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = "Verificando…";
+    const url = document.getElementById("accUrl").value.trim(), clave = document.getElementById("accClave").value.trim(), nombre = document.getElementById("accNombre").value.trim();
+    try {
+      if (!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1)/.test(url)) throw new Error("La URL debe ser la del puente (termina en /exec).");
+      await entrar(url, clave, nombre); location.reload();
+    } catch (err) { pantallaAcceso({ url, clave, nombre }, (err && err.message) || "No se pudo contactar el puente. Revisa la señal y la URL."); }
   };
-  const denied = () => card(`<h2>Acceso pendiente</h2><p class="hint">La cuenta <strong>${u.email}</strong> no está autorizada. Pide al DT que la agregue en Ajustes → Asistentes.</p><button class="btn wide" onclick="cerrarSesion()">Usar otra cuenta</button>`);
-  // Con un rol ya conocido en este teléfono, la app abre al instante (también sin señal) y se verifica en segundo plano.
-  if (cached) { owner = !!cached.owner; finish(); }
-  else gate(card(`<h2>Conectando…</h2><p class="hint">Verificando tu acceso con ${u.email}.</p>`));
-  try { await withTimeout(getDoc(doc(fs, "config", "plantilla")), 25000); }
-  catch (e) {
-    if (e && e.code === "permission-denied") { try { localStorage.removeItem(key); } catch (x) {} done = true; gate(denied()); return; }
-    if (!cached) gate(card(`<h2>Sin conexión</h2><p class="hint">La primera vez la app necesita señal para verificar tu acceso. Conéctate y vuelve a intentar.</p><p class="hint" style="font-size:.8rem">Detalle: ${String((e && (e.code + " " + (e.message || ""))) || e).replace(/[<>&]/g, "").slice(0, 160)} · ${navigator.onLine ? "en línea" : "sin red"}</p><button class="btn pri wide" onclick="location.reload()">Reintentar</button><button class="btn wide" style="margin-top:8px" onclick="cerrarSesion()">Cerrar sesión</button>`));
-    return;
-  }
-  let isOwner = false, sure = true;
-  try { await withTimeout(getDoc(doc(fs, "config", "hoja")), 12000); isOwner = true; }
-  catch (e) { if (!(e && e.code === "permission-denied")) { sure = false; isOwner = cached ? !!cached.owner : false; } }
-  if (sure) try { localStorage.setItem(key, JSON.stringify({ owner: isOwner })); } catch (x) {}
-  if (!done) { owner = isOwner; finish(); }
-  else if (sure && isOwner !== owner) location.reload();
-});
+}
+
+// ---------- Arranque ----------
+(async function arranque() {
+  const inv = leerInvitacion();
+  if (inv && inv.url && inv.clave) { pantallaAcceso({ url: inv.url, clave: inv.clave }, ""); return; }
+  if (!cfg) { pantallaAcceso(null, ""); return; }
+  await abrirIDB(); await idbAll();
+  gate("");
+  if (window.__setReady) window.__setReady(api);
+  kick();
+})();
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

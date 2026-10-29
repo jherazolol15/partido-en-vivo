@@ -5,14 +5,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-<script>window.__ready=new Promise(function(r){window.__setReady=r});window.claude={use:function(n){return window.__ready.then(function(c){return c.use(n)})}};</script>
+<script>window.blobUrl=function(){return "data:image/gif;base64,R0lGODlhAQABAAAAACw="};window.__ready=new Promise(function(r){window.__setReady=r});window.claude={use:function(n){return window.__ready.then(function(c){return c.use(n)})}};</script>
 <script>
 window.__errs=[];
 addEventListener("error",function(e){__errs.push((e.message||"error")+" ("+String(e.filename||"").split("/").pop()+")")});
 addEventListener("unhandledrejection",function(e){var r=e.reason;__errs.push(String(r&&(r.code||r.message)||r))});
 setTimeout(function(){
   if(window.__booted)return;
-  var t=(__errs.join(" | ")||"Firebase no respondió").replace(/[<>&]/g,"");
+  var t=(__errs.join(" | ")||"La app no respondió").replace(/[<>&]/g,"");
   var d=document.createElement("div");
   d.innerHTML='<div style="position:fixed;inset:0;z-index:200;background:#0b1714;color:#e8f3ef;display:grid;place-items:center;padding:24px;font:16px system-ui,sans-serif"><div style="max-width:420px;text-align:center"><h2 style="margin:0 0 8px">La app no terminó de iniciar</h2><p style="color:#93b0a8;font-size:14px">Detalle: '+t+'</p><button id="pevFix" style="width:100%;min-height:50px;border:0;border-radius:12px;background:#2fbf7a;color:#04140d;font-weight:700;font-size:16px">Reparar y recargar</button></div></div>';
   document.body.appendChild(d);
@@ -520,7 +520,7 @@ function renderBoard(){
   const local=m?.localia!=="Visitante";
   const us=TEAM,them=m?.rival||"Rival";
   const gf=st?.gf??0,gc=st?.gc??0;
-  const pend=S.queue.length;
+  const pend=S.queue.length+(window.__outboxCount?window.__outboxCount():0);
   const themH=m?(local?esc(them)+rivalCrest(them):rivalCrest(them)+esc(them)):esc(them);
   const usH=(S.marca?.logo?`<img class="crest" src="${blobUrl(S.marca.logo)}" alt="">`:"")+esc(us);
   $("#board").innerHTML=`<div class="board-in">
@@ -967,11 +967,6 @@ function viewAjustes(){
    ${S.assets?`<button class="btn sm" data-act="pick" data-for="logoIn">Subir escudo</button><input type="file" id="logoIn" class="vh" accept="image/*">`:""}
    <div class="brand">${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:'<span class="av">DT</span>'}<div class="meta"><strong>${esc(defaultStaff().dt)}</strong><p class="hint">Tu foto aparece en el informe y en la imagen para WhatsApp.</p></div></div>
    ${S.assets?`<button class="btn sm" data-act="pick" data-for="dtIn">Subir mi foto</button><input type="file" id="dtIn" class="vh" accept="image/*">`:'<div class="banner warn">Solo quien edita la app puede subir imágenes.</div>'}</section>
-  <section class="sec"><h2>Conexión con tu hoja</h2><p class="hint">Pega la URL del puente Apps Script (termina en /exec) y la clave que mostró configurarClave().</p>
-   <label class="f">URL del puente<input id="pUrl" value="${esc(S.hoja?.puenteUrl||"")}" placeholder="https://script.google.com/macros/s/…/exec"></label>
-   <label class="f">Clave<input id="pClave" type="password" value="${esc(S.hoja?.clave||"")}" autocomplete="off"></label>
-   <div class="row"><button class="btn pri" style="flex:1" data-act="saveConn">Guardar</button><button class="btn" data-act="testConn">Probar conexión</button></div>
-   ${S.hoja?.puenteUrl?'<p class="hint">Conexión guardada.</p>':'<div class="banner warn">Sin conexión configurada: la app no puede leer ni escribir tu hoja.</div>'}</section>
   <section class="sec"><h2>Hoja de pruebas</h2><p class="hint">Para probar la sincronización sin tocar tus datos: en Google Drive abre tu hoja, usa Archivo → Hacer una copia y pega aquí el enlace de la copia.</p>
    <label class="f">Enlace o ID de la copia<input id="hojaId" value="${esc(S.hoja?.testId||"")}" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
    <label class="row" style="gap:8px"><input type="checkbox" id="hojaTest" ${S.hoja?.test?"checked":""} style="width:22px;height:22px"><span>Usar la hoja de pruebas</span></label>
@@ -985,10 +980,9 @@ function viewAjustes(){
   <section class="sec"><h2>Dorsales</h2><p class="hint">Cada jugador tiene un dorsal fijo. Cámbialo aquí; se guarda en la app y en la columna Dorsal de tu hoja.</p>
    <div class="plist">${(S.roster?.jugadores||[]).map(j=>`<div class="prow">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j))}</span></span></span><input id="dor_${j.id}" data-dor="${j.id}" inputmode="numeric" maxlength="3" value="${esc(j.dorsal||"")}" aria-label="Dorsal de ${esc(j.nombre)}" style="width:64px;min-height:44px;text-align:center;font-family:var(--display);font-size:1.3rem;font-weight:700;background:var(--surface-2);border:1px solid var(--border);border-radius:10px"></div>`).join("")}</div>
    <button class="btn pri wide" data-act="saveDorsales">Guardar dorsales</button></section>
-  <section class="sec"><h2>Asistentes</h2><p class="hint">Correos de Google autorizados para anotar en la pestaña En vivo. No necesitan acceso a tu hoja: les compartes la dirección de la app y entran con ese correo.</p>
-   <div class="plist">${(S.usuarios?.asistentes||[]).map(e=>`<div class="prow"><span class="meta"><span class="nm">${esc(e)}</span></span><button class="btn sm" data-act="delAsis" data-id="${esc(e)}">Quitar</button></div>`).join("")||'<p class="hint">Aún no hay asistentes.</p>'}</div>
-   <div class="row"><input id="asisMail" type="email" class="tin" style="flex:1;min-width:0" placeholder="correo@gmail.com" aria-label="Correo del asistente"><button class="btn pri" data-act="addAsis">Agregar</button></div></section>
-  <section class="sec"><h2>Sesión</h2><button class="btn wide" data-act="logout">Cerrar sesión</button></section>
+  <section class="sec"><h2>Acceso y asistentes</h2><p class="hint">Entraste como <strong>${S.isOwner?"DT":"asistente"}</strong>. Para que un asistente o PF anote desde su teléfono, envíale el enlace de invitación: al abrirlo, su app queda configurada con la clave de asistente (solo puede ver el partido, mover el reloj y registrar eventos).</p>
+   <button class="btn sky wide" data-act="invAsis">Copiar enlace para asistente</button><div id="invOut"></div>
+   <button class="btn wide" data-act="logout">Cerrar sesión en este teléfono</button></section>
   ${registroHtml()}
   ${S.match?`<section class="sec"><h2>Partido activo</h2><p class="hint">${esc(S.match.rival||"")} · ${esc(dmy(S.match.fecha))}</p><button class="btn wide" data-act="closeMatch">Cerrar partido activo</button></section>`:""}`;
 }
@@ -1101,10 +1095,7 @@ document.addEventListener("click",async ev=>{
       const min=Math.max(1,Math.min(dur(),parseInt($("#epMin").value,10)||1));
       if(!r.inicio1)r.inicio1=now;if(min<=half()&&!r.fin1)r.fin1=now;if(!r.fin2)r.fin2=now;
       await setMatch({reloj:r,estadoPartido:{estado:est,motivo:$("#epMotivo").value,minuto:min,periodo:min<=half()?1:2,nota:($("#epNota").value||"").trim()}});closeSheet();toast("Partido "+est.toLowerCase()+" en el min. "+min+".");break}
-    case "addAsis":{const e=($("#asisMail").value||"").trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){toast("Escribe un correo válido.");return}S.usuarios={asistentes:[...new Set([...(S.usuarios?.asistentes||[]),e])]};try{await writeDoc("config/usuarios",S.usuarios)}catch(x){}render();toast("Asistente agregado.");break}
-    case "delAsis":{S.usuarios={asistentes:(S.usuarios?.asistentes||[]).filter(x=>x!==id)};try{await writeDoc("config/usuarios",S.usuarios)}catch(x){}render();toast("Asistente quitado.");break}
-    case "saveConn":{const u=($("#pUrl").value||"").trim(),k=($("#pClave").value||"").trim();if(u&&!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(u)){toast("La URL debe ser la del puente y terminar en /exec.");return}S.hoja=Object.assign({},S.hoja,{puenteUrl:u,clave:k});try{await writeDoc("config/hoja",S.hoja)}catch(x){}render();toast("Conexión guardada.");break}
-    case "testConn":{const u=($("#pUrl").value||"").trim(),k=($("#pClave").value||"").trim();el.disabled=true;el.textContent="Probando…";try{const r=await window.probarPuente(u,k);toast(r.ok?"Conectado a: "+r.hoja:(r.error==="clave_incorrecta"?"La clave no coincide.":"Error: "+(r.detalle||r.error)))}catch(x){toast("No se pudo contactar el puente. Revisa la URL.")}el.disabled=false;el.textContent="Probar conexión";break}
+    case "invAsis":{el.disabled=true;try{const u=await window.invitacionAsistente();let ok=false;try{await navigator.clipboard.writeText(u);ok=true}catch(x){}$("#invOut").innerHTML=`<label class="f">Enlace${ok?" (copiado)":""}<input class="tin" readonly value="${esc(u)}" onclick="this.select()"></label>`;toast(ok?"Enlace copiado: envíalo por WhatsApp.":"Copia el enlace y envíalo por WhatsApp.")}catch(x){toast("Se necesita señal para crear el enlace.")}el.disabled=false;break}
     case "logout":window.cerrarSesion&&window.cerrarSesion();break;
     case "undoLast":{const last=allEvents().filter(e=>!e.anulado&&(S.isOwner||e.autor===S.uid)).sort((a,b)=>b.ts-a.ts)[0];if(!last){toast("No hay eventos para deshacer.");return}annulEvent(last.id,true);buzz(80);toast("Deshecho: "+(TIPO_TXT[last.tipo]||last.tipo)+" ("+last.minuto+"')");break}
     case "theme":{const t=LS.get("theme","auto");LS.set("theme",t==="auto"?"light":t==="light"?"dark":"auto");applyTheme();renderBoard();if(S.view==="ajustes")render();break}
@@ -1188,14 +1179,15 @@ render();
     db.collection("partidos").onSnapshot(q=>{S.allMatches=q.docs.map(d=>Object.assign({_id:d.id},cl(d.data())));if(S.view==="ajustes")render()},()=>{});
     db.doc("config/marca").onSnapshot(s=>{if(s.exists){S.marca=cl(s.data());cacheLocal();render()}},()=>{});
     db.doc("config/hoja").onSnapshot(s=>{if(s.exists){S.hoja=cl(s.data());cacheLocal();renderBoard()}},()=>{});
-    db.doc("config/usuarios").onSnapshot(s=>{if(s.exists){S.usuarios=cl(s.data());if(S.view==="ajustes")render()}},()=>{});
     db.doc("config/staff").onSnapshot(s=>{if(s.exists){S.staff=cl(s.data());cacheLocal()}},()=>{});
     db.doc("config/formaciones").onSnapshot(s=>{if(s.exists){S.forms=cl(s.data()).map||{};cacheLocal()}},()=>{});
-    db.doc("config/estado").onSnapshot(s=>{if(!s.exists){if(S.mid&&!unsub.match)subscribeMatch(S.mid);return}const a=cl(s.data()).actual||null;S.estado={actual:a};if(a!==S.mid)subscribeMatch(a);else render()},()=>{});
+    db.doc("config/estado").onSnapshot(s=>{if(!s.exists){if(S.mid&&!unsub.match)subscribeMatch(S.mid);return}const a=cl(s.data()).actual||null;S.estado={actual:a};if(a!==S.mid||!unsub.match)subscribeMatch(a);else render()},()=>{});
     flushQueue();
   }
   render();
 })();
 </script>
+
+<script>window.__outboxChanged=function(){try{renderBoard()}catch(e){}};</script>
 
 </body></html>
