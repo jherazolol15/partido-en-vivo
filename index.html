@@ -179,6 +179,15 @@ nav.tabs button.on{color:var(--accent);border-top-color:var(--accent)}
 .minbox .btn{min-width:50px;padding:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;max-width:90%;text-align:center}
 .tbl{overflow-x:auto}
+.alin{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;margin-top:6px}
+.alin .ar{display:grid;grid-template-columns:24px minmax(0,1fr) 22px 34px 24px;align-items:center;gap:4px;padding:5px 2px;border-bottom:1px solid var(--border);font-size:.85rem}
+.alin .ar.h{font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+.alin .ar .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alin .ar .d{font-family:var(--display);font-weight:700;text-align:center}
+.alin .ar .c{text-align:center;font-variant-numeric:tabular-nums}
+.alin .ar .xi{font-size:.62rem;font-weight:700;color:var(--accent);text-align:center}
+.alin .ar.nj{color:var(--muted)}
+@media (max-width:560px){.alin{grid-template-columns:1fr}.alin>div+div>.ar.h{display:none}}
 .tbl table{border-collapse:collapse;width:100%;font-size:.9rem}
 .tbl th,.tbl td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap}
 .tbl th:nth-child(2),.tbl td:nth-child(2){text-align:left}
@@ -295,6 +304,10 @@ function todayStr(){const d=new Date();return d.getFullYear()+"-"+pad2(d.getMont
 function dmy(iso){if(!iso)return "";const [y,m,d]=iso.split("-");return d+"/"+m+"/"+y}
 function isoFromDmy(s){const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s||"");return m?m[3]+"-"+pad2(m[2])+"-"+pad2(m[1]):todayStr()}
 function player(id){return S.roster?.jugadores?.find(j=>j.id===id)}
+const PARTIC=new Set(["de","del","la","las","los","y","da","van","von"]);
+function cortoAuto(nombre){const w=String(nombre||"").trim().split(/\s+/).filter(Boolean);if(w.length<2)return w[0]||"";
+  const ap=w.length>=4?w[w.length-2]:w[1];const i=w.indexOf(ap);const pre=i>0&&PARTIC.has(w[i-1].toLowerCase())?w[i-1]+" ":"";return w[0][0].toUpperCase()+". "+pre+ap}
+function corto(id){const o=(S.cortos||{})[id];return o&&o.trim()?o.trim():cortoAuto(player(id)?.nombre||id)}
 function shortName(id){const p=player(id);if(!p)return id||"—";const parts=p.nombre.split(" ");return parts.length>=3?parts[0]+" "+parts[parts.length-2]:p.nombre}
 function initials(id){const p=player(id);if(!p)return "?";if(p.dorsal)return p.dorsal;const w=p.nombre.split(" ");return (w[0][0]+(w[w.length-2]||w[1]||"")[0]).toUpperCase()}
 function fotoUrl(id){const a=S.fotos[id];return a?blobUrl(a):null}
@@ -386,8 +399,8 @@ function finalStats(){
 }
 
 /* ============ Persistencia ============ */
-function cacheLocal(){LS.set("cache",{roster:S.roster,fotos:S.fotos,forms:S.forms,estado:S.estado,mid:S.mid,match:S.match,events:S.events,staff:S.staff,marca:S.marca,hoja:S.hoja})}
-function loadLocal(){const c=LS.get("cache",null);if(c){Object.assign(S,{roster:c.roster||null,fotos:c.fotos||{},forms:c.forms||{},estado:c.estado||{actual:null},mid:c.mid||null,match:c.match||null,events:c.events||[],staff:c.staff||null,marca:c.marca||{},hoja:c.hoja||{test:false,testId:""}})}S.queue=LS.get("queue",[]);S.draft=LS.get("draft",null)}
+function cacheLocal(){LS.set("cache",{roster:S.roster,fotos:S.fotos,forms:S.forms,estado:S.estado,mid:S.mid,match:S.match,events:S.events,staff:S.staff,marca:S.marca,hoja:S.hoja,cortos:S.cortos})}
+function loadLocal(){const c=LS.get("cache",null);if(c){Object.assign(S,{roster:c.roster||null,fotos:c.fotos||{},forms:c.forms||{},estado:c.estado||{actual:null},mid:c.mid||null,match:c.match||null,events:c.events||[],staff:c.staff||null,marca:c.marca||{},hoja:c.hoja||{test:false,testId:""},cortos:c.cortos||{}})}S.queue=LS.get("queue",[]);S.draft=LS.get("draft",null)}
 function saveQueue(){LS.set("queue",S.queue)}
 function saveDraft(){LS.set("draft",S.draft)}
 
@@ -907,7 +920,10 @@ function viewInforme(){
   return `<section class="sec"><div class="brand">${mk.logo?`<img src="${blobUrl(mk.logo)}" alt="Escudo">`:""}<div class="meta" style="flex:1"><h2>Informe de partido</h2><span class="hint">${esc(TEAM)} · Sub-15</span></div>${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:""}</div><p class="hint">Mismo orden de la planilla de coordinación: cópialo de arriba abajo.</p>
    <div class="kvs">${kv("Competición",m.competicion)}${kv("Jornada",m.jornada)}${kv("Fecha",dmy(m.fecha))}${kv("Hora",m.hora)}${kv("Lugar",m.lugar)}${kv("Marcador",gl+" – "+gv)}${kv("Local",L)}${kv("Visitante",V)}${kv("Clima",m.clima)}${kv("Temperatura",m.temp!==""&&m.temp!=null?m.temp+" °C":"")}${kv("Estado del partido",estadoTxt(m))}</div></section>
   <section class="sec"><h3>1 · Alineación, sistema y estadísticas</h3>${kv("Sistema",m.formacion)}
-   <div class="tbl"><table><thead><tr><th>#</th><th>Jugador</th><th>Dorsal</th><th>XI</th></tr></thead><tbody>${conv.map((id,i)=>`<tr><td class="num">${i+1}</td><td>${esc(player(id)?.nombre||id)}</td><td class="num">${esc(player(id)?.dorsal||"")}</td><td>${tit.has(id)?"X":""}</td></tr>`).join("")}</tbody></table></div>
+   ${(()=>{const rows=fs.rows;if(!rows.length)return '<p class="hint">Sin convocados.</p>';const half=Math.ceil(rows.length/2);
+     const fila=r=>{const nt=c.notas[r.id];const jugo=r.mins>0||r.cond!=="Convocado sin jugar";return `<div class="ar${jugo?"":" nj"}"><span class="d">${esc(player(r.id)?.dorsal||"")}</span><span class="n">${esc(corto(r.id))}</span><span class="xi">${r.cond==="Titular"?"XI":""}</span><span class="c">${jugo?esc(r.mins)+"'":"—"}</span><span class="c"><strong>${nt?esc(nt):"—"}</strong></span></div>`};
+     const col=l=>`<div><div class="ar h"><span>#</span><span>Jugador</span><span></span><span class="c">Min</span><span class="c">Nota</span></div>${l.map(fila).join("")}</div>`;
+     return `<div class="alin">${col(rows.slice(0,half))}${col(rows.slice(half))}</div><p class="hint" style="margin-top:6px">XI = titular · Min = minutos jugados · ${rows.filter(r=>r.cond==="Titular").length} titulares, ${rows.filter(r=>r.cond==="Suplente").length} suplentes con minutos.</p>`})()}
    <h3>Cuerpo técnico presente</h3>${(()=>{const ll=STAFF.filter(([k])=>String(sf[k]??"").trim());return ll.length?`<div class="kvs">${ll.map(([k,l])=>kv(l,sf[k])).join("")}</div>`:'<p class="hint">Sin registrar.</p>'})()}
    <h3>Cambios</h3>${cambios.length?`<div class="tbl"><table><thead><tr><th>Min.</th><th>Sale</th><th>Entra</th></tr></thead><tbody>${cambios.map(e=>`<tr><td class="num">${esc(e.minuto)}'</td><td>${esc(pj(e.jugador))}</td><td>${esc(pj(e.rel))}</td></tr>`).join("")}</tbody></table></div>`:'<p class="hint">Sin cambios.</p>'}
    ${kv("Tarjetas nuestro equipo (amarillas / rojas)",am+" / "+ro)}${(()=>{const ct=evs.filter(e=>e.tipo==="amon_ct");return ct.length?kv("Tarjetas cuerpo técnico",ct.map(e=>e.minuto+"' "+(e.color==="roja"?"roja":"amarilla")+" · "+(e.detalle||"")).join("\n")):""})()}</section>
@@ -1028,6 +1044,9 @@ function viewAjustes(){
   <section class="sec"><h2>Dorsales</h2><p class="hint">Cada jugador tiene un dorsal fijo. Cámbialo aquí; se guarda en la app y en la columna Dorsal de tu hoja.</p>
    <div class="plist">${(S.roster?.jugadores||[]).map(j=>`<div class="prow">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j))}</span></span></span><input id="dor_${j.id}" data-dor="${j.id}" inputmode="numeric" maxlength="3" value="${esc(j.dorsal||"")}" aria-label="Dorsal de ${esc(j.nombre)}" style="width:64px;min-height:44px;text-align:center;font-family:var(--display);font-size:1.3rem;font-weight:700;background:var(--surface-2);border:1px solid var(--border);border-radius:10px"></div>`).join("")}</div>
    <button class="btn pri wide" data-act="saveDorsales">Guardar dorsales</button></section>
+  <section class="sec"><h2>Nombre en el informe</h2><p class="hint">En el informe cada jugador aparece con su inicial y apellido. Si alguno sale mal (por ejemplo, un segundo nombre tomado como apellido), escríbelo aquí; vacío = automático.</p>
+   <div class="plist">${(S.roster?.jugadores||[]).map(j=>`<div class="prow"><span class="meta"><span class="nm">${esc(j.nombre)}</span></span><input id="cor_${j.id}" data-cor="${j.id}" maxlength="22" value="${esc((S.cortos||{})[j.id]||"")}" placeholder="${esc(cortoAuto(j.nombre))}" aria-label="Nombre corto de ${esc(j.nombre)}" style="width:140px;min-height:44px;padding:0 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px"></div>`).join("")}</div>
+   <button class="btn pri wide" data-act="saveCortos">Guardar nombres</button></section>
   <section class="sec"><h2>Acceso y asistentes</h2><p class="hint">Entraste como <strong>${S.isOwner?"DT":"asistente"}</strong>. Para que un asistente o PF anote desde su teléfono, envíale el enlace de invitación: al abrirlo, su app queda configurada con la clave de asistente (solo puede ver el partido, mover el reloj y registrar eventos).</p>
    <button class="btn sky wide" data-act="invAsis">Copiar enlace para asistente</button><div id="invOut">${S._inv?`<label class="f">Enlace para el asistente<input id="invLink" class="tin" readonly value="${esc(S._inv)}" onclick="this.select()"></label>`:""}</div>
    <button class="btn wide" data-act="logout">Cerrar sesión en este teléfono</button></section>
@@ -1182,6 +1201,7 @@ document.addEventListener("click",async ev=>{
       finally{render()}break}
     case "faseLvl":{const c=cierre();const k=el.dataset.k,n=Number(el.dataset.n);const f=c.fases[k]=c.fases[k]||{};f.n=f.n===n?null:n;saveCierre(true);break}
     case "star":{const c=cierre();c.dest[id]=c.dest[id]!=null?null:"";saveCierre(true);break}
+    case "saveCortos":{const o={};document.querySelectorAll("[data-cor]").forEach(i=>{const v=i.value.trim();if(v)o[i.dataset.cor]=v});S.cortos=o;cacheLocal();try{await writeDoc("config/cortos",{map:o})}catch(e){}toast("Nombres guardados.");break}
     case "saveStaff":{const o={};document.querySelectorAll("[data-cfg]").forEach(i=>o[i.dataset.cfg]=i.value.trim());S.staff=o;cacheLocal();try{await writeDoc("config/staff",o)}catch(e){}toast("Cuerpo técnico guardado.");break}
     case "openMatch":{S.estado={actual:id};try{await writeDoc("config/estado",S.estado)}catch(e){}subscribeMatch(id);S.view="cierre";render();window.scrollTo(0,0);toast("Partido abierto.");break}
     case "delMatch":{const m=(S.allMatches||[]).find(x=>x._id===id)||(id===S.mid?S.match:null);if(!m)return;const sy=m.sync||{};const inSheet=Object.values(sy).some(Boolean);
@@ -1249,6 +1269,7 @@ render();
     db.collection("partidos").onSnapshot(q=>{S.allMatches=q.docs.map(d=>Object.assign({_id:d.id},cl(d.data())));if(S.view==="ajustes")render()},()=>{});
     db.doc("config/marca").onSnapshot(s=>{if(s.exists){S.marca=cl(s.data());cacheLocal();render()}},()=>{});
     db.doc("config/hoja").onSnapshot(s=>{if(s.exists){S.hoja=cl(s.data());cacheLocal();renderBoard()}},()=>{});
+    db.doc("config/cortos").onSnapshot(s=>{if(s.exists){S.cortos=cl(s.data()).map||{};cacheLocal();if(S.view==="informe"||S.view==="ajustes")render()}},()=>{});
     db.doc("config/staff").onSnapshot(s=>{if(s.exists){S.staff=cl(s.data());cacheLocal()}},()=>{});
     db.doc("config/formaciones").onSnapshot(s=>{if(s.exists){S.forms=cl(s.data()).map||{};cacheLocal()}},()=>{});
     db.doc("config/estado").onSnapshot(s=>{if(!s.exists){if(S.mid&&!unsub.match)subscribeMatch(S.mid);return}const a=cl(s.data()).actual||null;S.estado={actual:a};if(a!==S.mid||!unsub.match)subscribeMatch(a);else render()},()=>{});
