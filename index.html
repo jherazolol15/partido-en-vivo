@@ -671,7 +671,7 @@ async function saveMatch(){
 
 /* ============ Vista: En vivo ============ */
 function viewVivo(){
-  if(!S.match)return `<section class="sec empty-state"><h2>Sin partido activo</h2><p class="hint">${S.isOwner?"Arma la convocatoria y la alineación en la pestaña Partido.":"Cuando el DT active el partido, aparecerá aquí."}</p>${S.isOwner?'<button class="btn pri" data-act="tab" data-v="partido">Ir a Partido</button>':""}</section>`;
+  if(!S.match)return `<section class="sec empty-state"><h2>Sin partido activo</h2><p class="hint">${S.isOwner?"Arma la convocatoria y la alineación en la pestaña Partido.":"Cuando el DT active el partido, aparecerá aquí."}</p>${S.isOwner?'<button class="btn pri" data-act="tab" data-v="partido">Ir a Partido</button>':'<button class="btn" data-act="logout">Cerrar sesión en este teléfono</button>'}</section>`;
   const st=computeState(activeEvents());const c=clockState();
   const r=S.match.reloj||{};
   let ctl="";
@@ -691,7 +691,7 @@ function viewVivo(){
     ${pitchHtml(st.coords,st.slots,{mode:"live",state:st})}
     <div class="quick"><button class="btn dan" data-act="golRival">Gol rival</button><button class="btn" data-act="noteFree">Nota</button><button class="btn" data-act="formChange">Formación</button><button class="btn" data-act="ctCard">Tarjeta cuerpo técnico</button></div><button class="btn wide" data-act="undoLast">Deshacer último evento</button></section>
    <section class="sec"><div class="row" style="justify-content:space-between"><h3>Banco</h3><span class="pill num" style="background:${cambiosAgotados()?"var(--danger)":"var(--surface-2)"};color:${cambiosAgotados()?"#fff":"var(--ink)"}">Cambios ${nCambios()}${S.match.maxCambios?" / "+S.match.maxCambios:""}</span></div><div class="bench">${bench.length?bench.map(id=>`<button data-act="benchP" data-id="${id}" class="${out.has(id)?"out":""}">${avatar(id)}<span class="lb">${esc(shortName(id))}</span><span class="mn">${liveMins(st,id)}'</span></button>`).join(""):'<span class="hint">Sin suplentes.</span>'}</div></section>
-   <section class="sec"><h3>Eventos</h3>${evs.length?`<ul class="tl">${evs.map(evRow).join("")}</ul>`:'<p class="hint">Los goles, tarjetas y cambios aparecerán aquí con su minuto.</p>'}</section>`;
+   ${S.isOwner?"":'<button class="btn sm" data-act="logout" style="align-self:center">Cerrar sesión en este teléfono</button>'}<section class="sec"><h3>Eventos</h3>${evs.length?`<ul class="tl">${evs.map(evRow).join("")}</ul>`:'<p class="hint">Los goles, tarjetas y cambios aparecerán aquí con su minuto.</p>'}</section>`;
 }
 function evIcon(e){return {gol:"⚽",gol_rival:"⚽",amarilla:'<i class="card-y"></i>',roja:'<i class="card-r"></i>',cambio:"⇄",penal_atajado:"🧤",lesion:"✚",formacion:"▦",nota:"✎",amon_ct:e.color==="roja"?'<i class="card-r"></i>':'<i class="card-y"></i>'}[e.tipo]||"·"}
 function evText(e){
