@@ -432,7 +432,7 @@ function subscribeMatch(mid){
   S.mid=mid;
   if(!mid){S.match=null;S.events=[];render();return}
   if(!S.db){render();return}
-  unsub.match=S.db.doc("partidos/"+mid).onSnapshot(s=>{if(s.exists){const nd=cl(s.data());if(S.match&&Date.now()-(S._typing||0)<2500){nd.cierre=S.match.cierre;nd.notas=S.match.notas}S.match=nd;cacheLocal();render()}},()=>{});
+  unsub.match=S.db.doc("partidos/"+mid).onSnapshot(s=>{if(s.exists){const nd=cl(s.data());if(S.match&&Date.now()-(S._typing||0)<2500){nd.cierre=S.match.cierre;nd.notas=S.match.notas;nd.clima=S.match.clima;nd.temp=S.match.temp}S.match=nd;cacheLocal();render()}},()=>{});
   unsub.events=S.db.collection("partidos/"+mid+"/eventos").onSnapshot(q=>{
     S.events=q.docs.map(d=>cl(d.data()));
     S.queue=S.queue.filter(x=>{const srv=S.events.find(e=>e.id===x.id);return !(srv&&srv.anulado===x.data.anulado&&srv.minuto===x.data.minuto)});
@@ -535,8 +535,13 @@ function renderTabs(){
   if(!tabs.find(t=>t[0]===S.view))S.view="vivo";
   $("#tabsIn").innerHTML=tabs.map(([k,l])=>`<button data-act="tab" data-v="${k}" class="${S.view===k?"on":""}">${l}</button>`).join("");
 }
+function escribiendo(){const ae=document.activeElement;const main=$("#main");if(!ae||!main||!main.contains(ae))return false;
+  const tx=ae.tagName==="TEXTAREA"||(ae.tagName==="INPUT"&&!/^(checkbox|radio|button|range|file|submit|color)$/i.test(ae.type||""));
+  return tx&&(S._composing||Date.now()-(S._typing||0)<1800)}
 function render(){
   renderBoard();renderTabs();
+  if(escribiendo()){clearTimeout(S._rt);S._rt=setTimeout(()=>{S._rt=null;render()},700);return}
+  clearTimeout(S._rt);S._rt=null;
   const v=S.view;let html="";
   if(v==="partido")html=viewPartido();else if(v==="vivo")html=viewVivo();else if(v==="cierre")html=viewCierre();else if(v==="informe")html=viewInforme();else html=viewAjustes();
   const main=$("#main");const y=window.scrollY;const ae=document.activeElement;const fid=ae&&ae.id&&main.contains(ae)?ae.id:null;let ss=null;try{ss=fid&&ae.selectionStart!=null?[ae.selectionStart,ae.selectionEnd]:null}catch(e){}
@@ -910,9 +915,51 @@ function viewInforme(){
   <section class="sec"><h3>3 · Momentos clave</h3>${momentos.length?`<ul class="tl">${momentos.map(e=>`<li><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}</span></li>`).join("")}</ul>`:'<p class="hint">Sin eventos registrados.</p>'}</section>
   <section class="sec"><h3>4 · Jugadores destacados</h3>${dest.length?`<div class="tbl"><table><thead><tr><th>Nota</th><th>Dorsal / jugador</th><th>Motivo</th></tr></thead><tbody>${dest.map(([id,v])=>`<tr><td class="num">${esc(c.notas[id]??"")}</td><td>${esc(pj(id))}</td><td style="white-space:normal;text-align:left">${esc(v)}</td></tr>`).join("")}</tbody></table></div>`:'<p class="hint">Marca destacados con ★ en el cierre.</p>'}</section>
   ${(m.galeria||[]).length?`<section class="sec"><h3>Galería · equipo presente</h3><div class="gal-big">${m.galeria.map(a=>`<img src="${blobUrl(a)}" alt="Foto del equipo en el partido" style="margin-bottom:8px">`).join("")}</div></section>`:""}
-  <section class="sec"><h3>5 · Conclusiones</h3><div class="kvs">${kv("Qué mantener",c.mantener)}${kv("Qué cambiar / trabajar en la semana",c.cambiar)}${kv("Próximo rival",c.proxRival)}${kv("Fecha",c.proxFecha?dmy(c.proxFecha):"")}</div></section>`;
+  <section class="sec"><h3>5 · Conclusiones</h3><div class="kvs">${kv("Qué mantener",c.mantener)}${kv("Qué cambiar / trabajar en la semana",c.cambiar)}${kv("Próximo rival",c.proxRival)}${kv("Fecha",c.proxFecha?dmy(c.proxFecha):"")}</div></section>
+  <section class="sec noexp"><h2>Descargar informe</h2><p class="hint">El informe completo, tal como se ve arriba, en fondo claro. La primera vez necesita señal.</p><div class="row"><button class="btn pri" style="flex:1" data-act="expInf" data-f="pdf">PDF</button><button class="btn sky" style="flex:1" data-act="expInf" data-f="png">Imagen</button></div><div id="expOut">${S._expHtml||""}</div></section>`;
 }
 
+/* ============ Informe en PDF / imagen ============ */
+const H2C_URL="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";let _h2c=null;
+function cargarH2C(){if(window.html2canvas)return Promise.resolve(window.html2canvas);if(_h2c)return _h2c;
+  _h2c=new Promise((res,rej)=>{const sc=document.createElement("script");sc.src=H2C_URL;sc.crossOrigin="anonymous";sc.onload=()=>window.html2canvas?res(window.html2canvas):rej(new Error("sin herramienta"));sc.onerror=()=>{_h2c=null;sc.remove();rej(new Error("sin señal"))};document.head.appendChild(sc)});return _h2c}
+async function capturarInforme(){
+  const h2c=await cargarH2C();
+  const host=document.createElement("div");host.className="exp-host";host.setAttribute("aria-hidden","true");
+  host.style.cssText="position:fixed;left:-12000px;top:0;width:760px;padding:20px;background:#ffffff";
+  host.innerHTML=viewInforme();host.querySelectorAll(".noexp").forEach(n=>n.remove());
+  host.insertAdjacentHTML("beforeend",`<p style="font-size:12px;color:#5b6f69;text-align:center;margin:8px 0 0">Generado ${new Date().toLocaleString("es-CO")} · ${esc(TEAM)}</p>`);
+  document.body.appendChild(host);
+  try{await Promise.all([...host.querySelectorAll("img")].map(im=>im.complete?0:new Promise(r=>{im.onload=im.onerror=r;setTimeout(r,4000)})));try{await document.fonts.ready}catch(e){}
+    const w=host.offsetWidth,h=host.offsetHeight;const sc=Math.max(1,Math.min(2,Math.sqrt(14e6/(w*h)),15000/h));
+    let cortes=[];const medir=hh=>[...hh.querySelectorAll(".sec, h2, h3, .kv, tr, li")].map(n=>{const a=n.getBoundingClientRect(),b=hh.getBoundingClientRect();return {y:Math.round((a.top-b.top)*sc)-6,t:/^H[23]$/.test(n.tagName)}}).filter((c,i,l)=>c.y>0&&!(!c.t&&l.some(o=>o.t&&o.y<c.y&&c.y-o.y<60*sc))).map(c=>c.y);
+    const cv=await h2c(host,{scale:sc,backgroundColor:"#ffffff",useCORS:true,logging:false,windowWidth:800,
+      onclone:d=>{d.documentElement.setAttribute("data-theme","light");const st=d.createElement("style");st.textContent=".exp-host .tbl{overflow:visible!important}.exp-host *{animation:none!important;transition:none!important}";d.head.appendChild(st);const hh=d.querySelector(".exp-host");if(hh)cortes=medir(hh)}});
+    return {cv,cortes:[...new Set(cortes)].sort((a,b)=>a-b)};
+  }finally{host.remove()}
+}
+const aBlob=(cv,t,q)=>new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error("imagen vacía")),t,q));
+async function pdfDesde(cv,cortes){
+  const PW=595.28,PH=841.89,M=28,k=(PW-2*M)/cv.width,alto=Math.floor((PH-2*M)/k);const pags=[];let y=0;
+  while(y<cv.height-2){let fin=Math.min(cv.height,y+alto);if(fin<cv.height){const c=cortes.filter(b=>b>y+alto*0.35&&b<=fin).pop();if(c)fin=c}
+    const pc=document.createElement("canvas");pc.width=cv.width;pc.height=fin-y;const g=pc.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,pc.width,pc.height);g.drawImage(cv,0,y,cv.width,fin-y,0,0,cv.width,fin-y);
+    pags.push({jpg:new Uint8Array(await (await aBlob(pc,"image/jpeg",0.9)).arrayBuffer()),w:pc.width,h:pc.height,dw:pc.width*k,dh:pc.height*k});y=fin}
+  const enc=new TextEncoder(),partes=[],offs=[];let len=0;const push=x=>{const b=typeof x==="string"?enc.encode(x):x;partes.push(b);len+=b.length};
+  const obj=(id,body)=>{offs[id]=len;push(id+" 0 obj\n"+body+"\nendobj\n")};
+  push("%PDF-1.4\n");obj(1,"<< /Type /Catalog /Pages 2 0 R >>");
+  obj(2,`<< /Type /Pages /Kids [${pags.map((_,i)=>(3+i*3)+" 0 R").join(" ")}] /Count ${pags.length} >>`);
+  pags.forEach((p,i)=>{const pid=3+i*3;
+    obj(pid,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PW} ${PH}] /Resources << /XObject << /Im${i} ${pid+2} 0 R >> >> /Contents ${pid+1} 0 R >>`);
+    const cs=`q ${p.dw.toFixed(2)} 0 0 ${p.dh.toFixed(2)} ${M} ${(PH-M-p.dh).toFixed(2)} cm /Im${i} Do Q`;obj(pid+1,`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`);
+    offs[pid+2]=len;push(`${pid+2} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpg.length} >>\nstream\n`);push(p.jpg);push("\nendstream\nendobj\n")});
+  const n=3+pags.length*3,xr=len;let x=`xref\n0 ${n}\n0000000000 65535 f \n`;for(let i=1;i<n;i++)x+=String(offs[i]).padStart(10,"0")+" 00000 n \n";
+  push(x+`trailer\n<< /Size ${n} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`);
+  return {blob:new Blob(partes,{type:"application/pdf"}),paginas:pags.length};
+}
+async function guardarArchivo(nombre,blob){
+  if(S.dl){try{await S.dl.save({filename:nombre,data:blob});return true}catch(e){}}
+  try{const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=nombre;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);return true}catch(e){return false}
+}
 /* ============ Informe imagen ============ */
 async function buildReport(){
   const m=S.match;const fs=finalStats();const evs=activeEvents();
@@ -1112,6 +1159,15 @@ document.addEventListener("click",async ev=>{
     case "restore":annulEvent(id,false);break;
     case "mvp":await setMatch({mvp:S.match.mvp===id?null:id});break;
     case "report":{el.disabled=true;el.textContent="Generando…";const r=await buildReport();$("#repPrev").innerHTML=`<img src="${r.url}" alt="Informe del partido" style="border-radius:12px;margin-top:8px"><button class="btn pri wide" style="margin-top:8px" id="dlRep" data-act="dlRep">Guardar imagen</button>`;S._rep=r;el.disabled=false;el.textContent="Generar de nuevo";break}
+    case "expInf":{if(S._exporting)return;S._exporting=true;const f=el.dataset.f;const txt=el.textContent;el.disabled=true;el.textContent="Preparando…";
+      try{const {cv,cortes}=await capturarInforme();const base=`Informe ${S.match.rival||"partido"} ${dmy(S.match.fecha).replace(/\//g,"-")}`;
+        let blob,nombre,extra="";if(f==="pdf"){const r=await pdfDesde(cv,cortes);blob=r.blob;nombre=base+".pdf";extra=` (${r.paginas} pág.)`}else{blob=await aBlob(cv,"image/png");nombre=base+".png"}
+        S._exp={blob,nombre};const ok=await guardarArchivo(nombre,blob);toast(ok?(f==="pdf"?"PDF guardado"+extra:"Imagen guardada"):"No se pudo guardar el archivo.");
+        const share=navigator.canShare&&navigator.canShare({files:[new File([blob],nombre,{type:blob.type})]});
+        S._expHtml=`<p class="hint" style="margin-top:8px">Listo: ${esc(nombre)}${extra}</p>${share?'<button class="btn wide" data-act="expShare" style="margin-top:6px">Compartir (WhatsApp, correo…)</button>':""}`;const out=$("#expOut");if(out)out.innerHTML=S._expHtml}
+      catch(x){toast(/señal|herramienta/.test(x&&x.message||"")?"Sin señal: la primera vez se necesita internet para preparar el informe.":"No se pudo generar: "+((x&&x.message)||"error"))}
+      S._exporting=false;el.disabled=false;el.textContent=txt;break}
+    case "expShare":{const e=S._exp;if(!e)return;try{await navigator.share({files:[new File([e.blob],e.nombre,{type:e.blob.type})],title:e.nombre})}catch(x){}break}
     case "dlRep":{if(!S.dl){toast("Mantén presionada la imagen para guardarla.");return}try{await S.dl.save({filename:`Informe ${S.match.rival||"partido"} ${dmy(S.match.fecha).replace(/\//g,"-")}.png`,data:S._rep.blob});toast("Imagen guardada.")}catch(e){toast("No se guardó la imagen.")}break}
     case "saveDorsales":{el.disabled=true;el.textContent="Guardando…";
       try{
@@ -1139,6 +1195,7 @@ document.addEventListener("click",async ev=>{
   }
 });
 document.addEventListener("input",ev=>{
+  if(ev.target.tagName==="TEXTAREA"||(ev.target.tagName==="INPUT"&&!/^(checkbox|radio|range|file)$/i.test(ev.target.type||"")))S._typing=Date.now();
   const k=ev.target.dataset?.inp;if(!k)return;const v=ev.target.value;
   if(k==="notasM"){S._typing=Date.now();S.match.notas=v;clearTimeout(S._nt);S._nt=setTimeout(()=>setMatch({notas:v}),700);return}
   if((k==="m_clima"||k==="m_temp")&&S.match){S._typing=Date.now();const f=k==="m_clima"?"clima":"temp";const val=f==="temp"?(v===""?"":Number(v)||v):v;S.match[f]=val;clearTimeout(S._mt);S._mt=setTimeout(()=>setMatch({[f]:val}),600);return}
@@ -1159,6 +1216,9 @@ document.addEventListener("input",ev=>{
   d[k]=v;saveDraft();
 });
 document.addEventListener("change",ev=>{if(ev.target.id==="fotosIn"&&ev.target.files?.length)uploadFotos([...ev.target.files]);if(ev.target.id==="galIn"&&ev.target.files?.length)uploadGaleria([...ev.target.files]);if((ev.target.id==="logoIn"||ev.target.id==="dtIn")&&ev.target.files?.length)uploadMarca(ev.target.id==="logoIn"?"logo":"dt",ev.target.files[0])});
+document.addEventListener("compositionstart",()=>{S._composing=true;S._typing=Date.now()});
+document.addEventListener("compositionend",()=>{S._composing=false;S._typing=Date.now()});
+document.addEventListener("focusout",()=>{if(S._rt){clearTimeout(S._rt);S._rt=null;S._typing=0;S._composing=false;setTimeout(render,0)}});
 function renderPartidoCount(){/* evita perder el foco del campo de cupo */}
 
 let wake=null;
