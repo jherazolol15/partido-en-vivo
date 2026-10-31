@@ -486,7 +486,7 @@ async function loadRosterFromSheet(){
     readRange("Listas!N2:N30"),readRange("Config!A29:B40"),readRange("Convocatoria!A5:O44").catch(()=>[])
   ]);
   const jug=[];
-  a.forEach((r,i)=>{if(!r||!r[0]||!r[1])return;const lab=r[1];jug.push({id:r[0],nombre:lab.replace(/^P\d+\s*·\s*/,""),dorsal:r[2]||"",pos1:(b[i]||[])[0]||"",pos2:(b[i]||[])[1]||"",estado:(c[i]||[])[0]||"",disp:(c[i]||[])[1]||"Disponible",grupo:(d[i]||[])[0]||"A"})});
+  a.forEach((r,i)=>{if(!r||!r[0]||!r[1])return;const lab=r[1];jug.push({id:r[0],nombre:lab.replace(/^P\d+\s*·\s*/,""),dorsal:r[2]||"",pos1:(b[i]||[])[0]||"",pos2:(b[i]||[])[1]||"",estado:(c[i]||[])[0]||"",disp:(c[i]||[])[1]||"Disponible",grupo:String((d[i]||[])[0]||"")})});
   (cv||[]).forEach(row=>{const j=jug.find(x=>x.id===row[0]);if(j){j.puntaje=row[12]||"";j.ranking=row[13]||"";j.sugerencia=row[14]||""}});
   const comps={};let duracion=80;
   cf.forEach(r=>{if(!r||!r[0])return;if(/^Duración del partido/.test(r[0]))duracion=Number(r[1])||80});
@@ -606,14 +606,14 @@ function viewPartido(){
   </div></section>`;
   html+=`<section class="sec"><h2>Cuerpo técnico presente</h2><p class="hint">Viene de Ajustes; cambia solo lo de este partido.</p><div class="grid2">${STAFF.map(([k,l])=>`<label class="f">${l}<input id="st_${k}" data-inp="st_${k}" value="${esc(d.staff[k]||"")}"></label>`).join("")}</div></section>`;
   // Convocatoria
-  const groups=["A","B"];
+  const groups=[...new Set(S.roster.jugadores.map(j=>String(j.grupo||"")))].sort();
   html+=`<section class="sec"><div class="row" style="justify-content:space-between"><h2>Convocatoria</h2><span class="pill num" style="background:${over?"var(--danger)":"var(--surface-2)"};color:${over?"#fff":"var(--ink)"}">${nConv}${d.cupo?" / "+d.cupo:" · sin tope"}</span></div>
    ${over?`<div class="banner err">Hay ${nConv-d.cupo} convocado(s) por encima del cupo de ${esc(d.comp)}.</div>`:""}
    <p class="hint">Toca para convocar. Lesionados y suspendidos aparecen marcados. El número verde es el puntaje (0-100) y el ranking de tu pestaña Convocatoria; la decisión es tuya.</p>`;
   for(const g of groups){
-    const list=S.roster.jugadores.filter(j=>(j.grupo||"A")===g&&j.estado!=="Inactivo");
+    const list=S.roster.jugadores.filter(j=>String(j.grupo||"")===g&&j.estado!=="Inactivo");
     if(!list.length)continue;
-    html+=`<h3>Grupo ${g}</h3><div class="plist">${list.map(j=>{const on=d.convocados.includes(j.id);return `<button class="prow ${on?"on":""}" data-act="conv" data-id="${j.id}">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j)||"Sin posición")}</span></span></span>${dispChip(j)}${j.puntaje?`<span class="scoreb" title="Puntaje de convocatoria">${esc(j.puntaje)}<small>#${esc(j.ranking)}</small></span>`:""}<span class="tick">${on?"✓":""}</span></button>`}).join("")}</div>`;
+    html+=`${groups.length>1?`<h3>${esc(/^[AB]$/.test(g)?"Grupo "+g:(g||"Sin grupo"))}</h3>`:""}<div class="plist">${list.map(j=>{const on=d.convocados.includes(j.id);return `<button class="prow ${on?"on":""}" data-act="conv" data-id="${j.id}">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j)||"Sin posición")}</span></span></span>${dispChip(j)}${j.puntaje?`<span class="scoreb" title="Puntaje de convocatoria">${esc(j.puntaje)}<small>#${esc(j.ranking)}</small></span>`:""}<span class="tick">${on?"✓":""}</span></button>`}).join("")}</div>`;
   }
   html+=`</section>`;
   // Alineación
@@ -830,6 +830,8 @@ async function doSync(){
   const dateF=`=DATE(${Number(y)};${Number(mo)};${Number(da)})`;
   const nextRow=async col=>{const v=await readRange(col);let n=v.length;while(n>0&&(!v[n-1]||!v[n-1][0]))n--;return n+1};
   try{
+    // 0. Plantilla al día: las etiquetas que se escriben deben coincidir con los nombres de la hoja
+    try{await loadRosterFromSheet()}catch(e){}
     // 1. Partidos
     let ptId=m.ptId, row=m.sheetRow;
     if(!sync.partidos){
@@ -1275,6 +1277,8 @@ render();
     db.doc("config/estado").onSnapshot(s=>{if(!s.exists){if(S.mid&&!unsub.match)subscribeMatch(S.mid);return}const a=cl(s.data()).actual||null;S.estado={actual:a};if(a!==S.mid||!unsub.match)subscribeMatch(a);else render()},()=>{});
     flushQueue();
   }
+  // Al abrir la app, el DT toma la plantilla vigente de la hoja (nombres, dorsales, disponibilidad)
+  if(S.isOwner&&mcp){loadRosterFromSheet().then(render).catch(()=>{})}
   render();
 })();
 </script>
