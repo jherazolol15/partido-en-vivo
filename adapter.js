@@ -289,7 +289,7 @@ async function entrar(url, clave, nombre) {
   ls.set("cfg", cfg);
 }
 function pantallaAcceso(pre, msg) {
-  gate(card(`<h2 style="text-align:center">Partido en vivo</h2><p class="hint" style="text-align:center">Jaguares de Córdoba · Sub-15 A</p>
+  gate(card(`<h2 style="text-align:center">Partido en vivo</h2><p class="hint" style="text-align:center">Jaguares de Córdoba · Sub-15</p>
     ${msg ? `<div class="banner err">${msg}</div>` : ""}
     <label class="f">URL del puente<input id="accUrl" value="${(pre && pre.url) || ""}" placeholder="https://script.google.com/macros/s/…/exec"></label>
     <label class="f">Clave<input id="accClave" type="password" value="${(pre && pre.clave) || ""}" autocomplete="off"></label>

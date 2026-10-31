@@ -904,7 +904,7 @@ function viewInforme(){
   const pj=id=>dorsalPre(id)+(player(id)?.nombre||id||"");
   const am=fs.rows.reduce((a,r)=>a+r.am,0),ro=fs.rows.reduce((a,r)=>a+r.ro,0);
   const mk=S.marca||{};
-  return `<section class="sec"><div class="brand">${mk.logo?`<img src="${blobUrl(mk.logo)}" alt="Escudo">`:""}<div class="meta" style="flex:1"><h2>Informe de partido</h2><span class="hint">${esc(TEAM)} · Sub-15 A</span></div>${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:""}</div><p class="hint">Mismo orden de la planilla de coordinación: cópialo de arriba abajo.</p>
+  return `<section class="sec"><div class="brand">${mk.logo?`<img src="${blobUrl(mk.logo)}" alt="Escudo">`:""}<div class="meta" style="flex:1"><h2>Informe de partido</h2><span class="hint">${esc(TEAM)} · Sub-15</span></div>${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:""}</div><p class="hint">Mismo orden de la planilla de coordinación: cópialo de arriba abajo.</p>
    <div class="kvs">${kv("Competición",m.competicion)}${kv("Jornada",m.jornada)}${kv("Fecha",dmy(m.fecha))}${kv("Hora",m.hora)}${kv("Lugar",m.lugar)}${kv("Marcador",gl+" – "+gv)}${kv("Local",L)}${kv("Visitante",V)}${kv("Clima",m.clima)}${kv("Temperatura",m.temp!==""&&m.temp!=null?m.temp+" °C":"")}${kv("Estado del partido",estadoTxt(m))}</div></section>
   <section class="sec"><h3>1 · Alineación, sistema y estadísticas</h3>${kv("Sistema",m.formacion)}
    <div class="tbl"><table><thead><tr><th>#</th><th>Jugador</th><th>Dorsal</th><th>XI</th></tr></thead><tbody>${conv.map((id,i)=>`<tr><td class="num">${i+1}</td><td>${esc(player(id)?.nombre||id)}</td><td class="num">${esc(player(id)?.dorsal||"")}</td><td>${tit.has(id)?"X":""}</td></tr>`).join("")}</tbody></table></div>
@@ -998,7 +998,7 @@ async function buildReport(){
     g.restore();g.strokeStyle="#f4c20d";g.lineWidth=10;g.beginPath();g.arc(cx,cy,rad,0,Math.PI*2);g.stroke();
     g.fillStyle="#fff";g.font=`800 58px ${D}`;g.fillText((player(m.mvp)?.nombre||"").toUpperCase(),W/2,cy+rad+70);
   }
-  g.textAlign="center";g.fillStyle="rgba(255,255,255,.75)";g.font=`600 28px ${D}`;g.fillText("JAGUARES DE CÓRDOBA · SUB-15 A · DT "+(defaultStaff().dt||"").toUpperCase(),W/2,H-70);
+  g.textAlign="center";g.fillStyle="rgba(255,255,255,.75)";g.font=`600 28px ${D}`;g.fillText("JAGUARES DE CÓRDOBA · SUB-15 · DT "+(defaultStaff().dt||"").toUpperCase(),W/2,H-70);
   return new Promise(res=>cv.toBlob(b=>res({blob:b,url:cv.toDataURL("image/png")}),"image/png"));
 }
 function wrapText(g,t,x,y,maxW,lh){const w=t.split(" ");let line="",lines=[];for(const s of w){const tt=line?line+" "+s:s;if(g.measureText(tt).width>maxW&&line){lines.push(line);line=s}else line=tt}lines.push(line);lines.slice(0,2).forEach((l,i)=>g.fillText(l,x,y+(i-(Math.min(lines.length,2)-1)/2)*lh))}
