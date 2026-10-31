@@ -211,9 +211,27 @@ const toBridgeValue = v => {
   if (typeof v === "string") { const m = /^=DATE\((\d+);(\d+);(\d+)\)$/.exec(v); if (m) return { fecha: m[1] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[3]).padStart(2, "0") }; }
   return v;
 };
+// Las lecturas que llegan juntas se agrupan en un solo pedido al puente.
+let lecturas = null;
+function leerAgrupado(sheetId, range) {
+  return new Promise((res, rej) => {
+    if (!lecturas || lecturas.sheetId !== sheetId) {
+      const grupo = lecturas = { sheetId, items: [] };
+      setTimeout(async () => {
+        if (lecturas === grupo) lecturas = null;
+        try {
+          const r = await puente({ op: "getMany", sheetId, ranges: grupo.items.map(i => i.range) }, 90000);
+          grupo.items.forEach((it, k) => it.res({ payload: { values: (r.valuesList || [])[k] || [] }, content: [] }));
+        } catch (e) { grupo.items.forEach(it => it.rej(e)); }
+      }, 60);
+    }
+    lecturas.items.push({ range, res, rej });
+  });
+}
 const mcp = {
   async callTool(server, tool, input) {
     if (!navigator.onLine) throw { code: "server_unavailable", message: "Sin señal", retryable: true };
+    if (tool === "get_values") return leerAgrupado(input.spreadsheetId || "", input.range);
     const body = { sheetId: input.spreadsheetId || "", range: input.range };
     if (tool === "get_values") body.op = "get";
     else if (tool === "update_values") { body.op = "set"; body.values = (input.values || []).map(r => r.map(toBridgeValue)); }

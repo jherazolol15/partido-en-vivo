@@ -964,9 +964,9 @@ function viewAjustes(){
   return `<section class="sec"><h2>Apariencia</h2><div class="seg">${[["auto","Automático"],["light","Día"],["dark","Noche"]].map(([k,l])=>`<button class="${t===k?"on":""}" data-act="themeSet" data-v="${k}">${l}</button>`).join("")}</div><p class="hint">Automático sigue el modo del teléfono. También puedes cambiarlo con el botón ${themeIcon()} del marcador.</p></section>
   <section class="sec"><h2>Club y entrenador</h2>
    <div class="brand">${mk.logo?`<img src="${blobUrl(mk.logo)}" alt="Escudo">`:'<span class="av">FC</span>'}<div class="meta"><strong>Escudo de Jaguares de Córdoba</strong><p class="hint">Aparece en el marcador, el informe y la imagen para WhatsApp. Mejor en PNG con fondo transparente.</p></div></div>
-   ${S.assets?`<button class="btn sm" data-act="pick" data-for="logoIn">Subir escudo</button><input type="file" id="logoIn" class="vh" accept="image/*">`:""}
+   ${S.assets?`<button class="btn sm" data-act="pick" data-for="logoIn">Subir escudo</button>`:""}
    <div class="brand">${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:'<span class="av">DT</span>'}<div class="meta"><strong>${esc(defaultStaff().dt)}</strong><p class="hint">Tu foto aparece en el informe y en la imagen para WhatsApp.</p></div></div>
-   ${S.assets?`<button class="btn sm" data-act="pick" data-for="dtIn">Subir mi foto</button><input type="file" id="dtIn" class="vh" accept="image/*">`:'<div class="banner warn">Solo quien edita la app puede subir imágenes.</div>'}</section>
+   ${S.assets?`<button class="btn sm" data-act="pick" data-for="dtIn">Subir mi foto</button>`:'<div class="banner warn">Solo quien edita la app puede subir imágenes.</div>'}</section>
   <section class="sec"><h2>Hoja de pruebas</h2><p class="hint">Para probar la sincronización sin tocar tus datos: en Google Drive abre tu hoja, usa Archivo → Hacer una copia y pega aquí el enlace de la copia.</p>
    <label class="f">Enlace o ID de la copia<input id="hojaId" value="${esc(S.hoja?.testId||"")}" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
    <label class="row" style="gap:8px"><input type="checkbox" id="hojaTest" ${S.hoja?.test?"checked":""} style="width:22px;height:22px"><span>Usar la hoja de pruebas</span></label>
@@ -974,7 +974,7 @@ function viewAjustes(){
   <section class="sec"><h2>Plantilla</h2><p class="hint">${n?`${n} jugadores cargados${S.roster.actualizado?" · actualizada "+new Date(S.roster.actualizado).toLocaleString("es-CO"):""}.`:"Aún no se ha cargado la plantilla."} Vuelve a cargarla cuando cambie la disponibilidad o agregues jugadores.</p>
    <button class="btn pri wide" data-act="loadRoster">Cargar plantilla desde la hoja</button></section>
   <section class="sec"><h2>Fotos</h2><p class="hint">${nf} de ${n} jugadores con foto. Elige varias imágenes a la vez, nombradas con el ID del jugador (P01.jpg, P02.jpg…). Se reducen y se guardan de forma privada en la app.</p>
-   ${S.assets?`<button class="btn sky wide" data-act="pick" data-for="fotosIn">Subir fotos</button><input type="file" id="fotosIn" class="vh" accept="image/*" multiple>`:'<div class="banner warn">Solo quien edita la app puede subir fotos.</div>'}
+   ${S.assets?`<button class="btn sky wide" data-act="pick" data-for="fotosIn">Subir fotos</button>`:'<div class="banner warn">Solo quien edita la app puede subir fotos.</div>'}
    <div class="row">${(S.roster?.jugadores||[]).map(j=>`<span title="${esc(j.nombre)}">${avatar(j.id)}</span>`).join("")}</div></section>
   <section class="sec"><h2>Cuerpo técnico</h2><p class="hint">Nombres que aparecen por defecto en cada partido.</p><div class="grid2">${STAFF.map(([k,l])=>`<label class="f">${l}<input id="cfg_${k}" data-cfg="${k}" value="${esc(defaultStaff()[k]||"")}"></label>`).join("")}</div><button class="btn pri wide" data-act="saveStaff">Guardar cuerpo técnico</button></section>
   <section class="sec"><h2>Dorsales</h2><p class="hint">Cada jugador tiene un dorsal fijo. Cámbialo aquí; se guarda en la app y en la columna Dorsal de tu hoja.</p>
@@ -1006,7 +1006,7 @@ function galeriaHtml(){
   const g=S.match?.galeria||[];
   return `<section class="sec"><h2>Galería</h2><p class="hint">Foto del equipo presente en el partido, como evidencia. Aparece en el Informe.</p>
    ${g.length?`<div class="gal">${g.map(a=>`<figure><img src="${blobUrl(a)}" alt="Foto del equipo">${S.assets?`<button class="btn sm del" data-act="delGal" data-id="${esc(a)}">Quitar</button>`:""}</figure>`).join("")}</div>`:'<p class="hint">Aún no hay fotos de este partido.</p>'}
-   ${S.assets?`<button class="btn sky wide" data-act="pick" data-for="galIn">Subir foto del equipo</button><input type="file" id="galIn" class="vh" accept="image/*" multiple>`:""}</section>`;
+   ${S.assets?`<button class="btn sky wide" data-act="pick" data-for="galIn">Subir foto del equipo</button>`:""}</section>`;
 }
 function shrinkMax(file,M){return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const i=new Image();i.onload=()=>{const s=Math.min(1,M/Math.max(i.width,i.height));const c=document.createElement("canvas");c.width=Math.round(i.width*s);c.height=Math.round(i.height*s);c.getContext("2d").drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);c.toBlob(b=>b?res(b):rej(),"image/jpeg",.85)};i.onerror=rej;i.src=u})}
 async function uploadGaleria(files){
@@ -1162,6 +1162,8 @@ setInterval(()=>{if(!S.match)return;const t=clockText();document.querySelectorAl
   const l=document.querySelector("[data-clocklabel]");if(l){const c=clockState();const s=c.label+" · "+(S.match.duracion||80)+"'";if(l.textContent!==s)l.textContent=s}},1000);
 
 /* ============ Arranque ============ */
+// Selectores de archivo fijos fuera de la vista: si la pantalla se refresca mientras eliges fotos, la selección no se pierde.
+[["fotosIn",true],["logoIn",false],["dtIn",false],["galIn",true]].forEach(([id,multi])=>{if(document.getElementById(id))return;const i=document.createElement("input");i.type="file";i.id=id;i.accept="image/*";i.multiple=multi;i.className="vh";document.body.appendChild(i)});
 applyTheme();
 loadLocal();
 S.view=S.mid?"vivo":"partido";
