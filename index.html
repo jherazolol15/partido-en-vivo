@@ -179,6 +179,13 @@ nav.tabs button.on{color:var(--accent);border-top-color:var(--accent)}
 .minbox .btn{min-width:50px;padding:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;max-width:90%;text-align:center}
 .tbl{overflow-x:auto}
+.ihd{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border-radius:12px}
+.ihd .t{font-family:var(--display);font-weight:700;font-size:1.1rem;text-transform:uppercase;letter-spacing:.03em;line-height:1.1;overflow-wrap:anywhere}
+.ihd .t.r{text-align:right}
+.ihd .t small{display:block;margin-top:2px;font-family:var(--body);font-size:.66rem;font-weight:600;letter-spacing:.06em;color:var(--muted)}
+.ihd .sc{font-family:var(--display);font-weight:800;font-size:2.3rem;line-height:1}
+.ifacts{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:.88rem}
+.ifacts b{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-right:5px}
 .alin{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;margin-top:6px}
 .alin .ar{display:grid;grid-template-columns:24px minmax(0,1fr) 22px 34px 24px;align-items:center;gap:4px;padding:5px 2px;border-bottom:1px solid var(--border);font-size:.85rem}
 .alin .ar.h{font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
@@ -919,8 +926,13 @@ function viewInforme(){
   const pj=id=>dorsalPre(id)+(player(id)?.nombre||id||"");
   const am=fs.rows.reduce((a,r)=>a+r.am,0),ro=fs.rows.reduce((a,r)=>a+r.ro,0);
   const mk=S.marca||{};
-  return `<section class="sec"><div class="brand">${mk.logo?`<img src="${blobUrl(mk.logo)}" alt="Escudo">`:""}<div class="meta" style="flex:1"><h2>Informe de partido</h2><span class="hint">${esc(TEAM)} · Sub-15</span></div>${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:""}</div><p class="hint">Mismo orden de la planilla de coordinación: cópialo de arriba abajo.</p>
-   <div class="kvs">${kv("Competición",m.competicion)}${kv("Jornada",m.jornada)}${kv("Fecha",dmy(m.fecha))}${kv("Hora",m.hora)}${kv("Lugar",m.lugar)}${kv("Marcador",gl+" – "+gv)}${kv("Local",L)}${kv("Visitante",V)}${kv("Clima",m.clima)}${kv("Temperatura",m.temp!==""&&m.temp!=null?m.temp+" °C":"")}${kv("Estado del partido",estadoTxt(m))}</div></section>
+  return `<section class="sec"><div class="brand">${mk.logo?`<img src="${blobUrl(mk.logo)}" alt="Escudo">`:""}<div class="meta" style="flex:1"><h2>Informe de partido</h2><span class="hint">${esc(TEAM)} · Sub-15</span></div>${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:""}</div>
+   ${(()=>{const usC=mk.logo?`<img class="crest" src="${blobUrl(mk.logo)}" alt="">`:"";const thC=rivalCrest(m.rival,26);
+     const eqL=local?usC+esc(L):thC+esc(L),eqV=local?esc(V)+thC:esc(V)+usC;
+     const tmp=m.temp!==""&&m.temp!=null?m.temp+" °C":"";
+     const hechos=[["Competición",m.competicion],["Jornada",m.jornada],["Fecha",[dmy(m.fecha),m.hora].filter(Boolean).join(" · ")],["Lugar",m.lugar],["Clima",[m.clima,tmp].filter(Boolean).join(" · ")],["Estado",estadoTxt(m)]].filter(([k,v])=>String(v??"").trim());
+     return `<div class="ihd"><div class="t">${eqL}<small>Local</small></div><div class="sc num">${gl}–${gv}</div><div class="t r">${eqV}<small>Visitante</small></div></div>
+     <div class="ifacts">${hechos.map(([k,v])=>`<span><b>${k}</b>${esc(v)}</span>`).join("")}</div>`})()}</section>
   <section class="sec"><h3>1 · Alineación, sistema y estadísticas</h3>${kv("Sistema",m.formacion)}
    ${(()=>{const rows=fs.rows;if(!rows.length)return '<p class="hint">Sin convocados.</p>';const half=Math.ceil(rows.length/2);
      const fila=r=>{const nt=c.notas[r.id];const jugo=r.mins>0||r.cond!=="Convocado sin jugar";return `<div class="ar${jugo?"":" nj"}"><span class="d">${esc(player(r.id)?.dorsal||"")}</span><span class="n">${esc(corto(r.id))}</span><span class="xi">${r.cond==="Titular"?"XI":""}</span><span class="c">${jugo?esc(r.mins)+"'":"—"}</span><span class="c"><strong>${nt?esc(nt):"—"}</strong></span></div>`};
