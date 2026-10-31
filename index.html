@@ -982,7 +982,7 @@ function viewAjustes(){
    <div class="plist">${(S.roster?.jugadores||[]).map(j=>`<div class="prow">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j))}</span></span></span><input id="dor_${j.id}" data-dor="${j.id}" inputmode="numeric" maxlength="3" value="${esc(j.dorsal||"")}" aria-label="Dorsal de ${esc(j.nombre)}" style="width:64px;min-height:44px;text-align:center;font-family:var(--display);font-size:1.3rem;font-weight:700;background:var(--surface-2);border:1px solid var(--border);border-radius:10px"></div>`).join("")}</div>
    <button class="btn pri wide" data-act="saveDorsales">Guardar dorsales</button></section>
   <section class="sec"><h2>Acceso y asistentes</h2><p class="hint">Entraste como <strong>${S.isOwner?"DT":"asistente"}</strong>. Para que un asistente o PF anote desde su teléfono, envíale el enlace de invitación: al abrirlo, su app queda configurada con la clave de asistente (solo puede ver el partido, mover el reloj y registrar eventos).</p>
-   <button class="btn sky wide" data-act="invAsis">Copiar enlace para asistente</button><div id="invOut"></div>
+   <button class="btn sky wide" data-act="invAsis">Copiar enlace para asistente</button><div id="invOut">${S._inv?`<label class="f">Enlace para el asistente<input id="invLink" class="tin" readonly value="${esc(S._inv)}" onclick="this.select()"></label>`:""}</div>
    <button class="btn wide" data-act="logout">Cerrar sesión en este teléfono</button></section>
   ${registroHtml()}
   ${S.match?`<section class="sec"><h2>Partido activo</h2><p class="hint">${esc(S.match.rival||"")} · ${esc(dmy(S.match.fecha))}</p><button class="btn wide" data-act="closeMatch">Cerrar partido activo</button></section>`:""}`;
@@ -1096,7 +1096,7 @@ document.addEventListener("click",async ev=>{
       const min=Math.max(1,Math.min(dur(),parseInt($("#epMin").value,10)||1));
       if(!r.inicio1)r.inicio1=now;if(min<=half()&&!r.fin1)r.fin1=now;if(!r.fin2)r.fin2=now;
       await setMatch({reloj:r,estadoPartido:{estado:est,motivo:$("#epMotivo").value,minuto:min,periodo:min<=half()?1:2,nota:($("#epNota").value||"").trim()}});closeSheet();toast("Partido "+est.toLowerCase()+" en el min. "+min+".");break}
-    case "invAsis":{el.disabled=true;try{const u=await window.invitacionAsistente();let ok=false;try{await navigator.clipboard.writeText(u);ok=true}catch(x){}$("#invOut").innerHTML=`<label class="f">Enlace${ok?" (copiado)":""}<input class="tin" readonly value="${esc(u)}" onclick="this.select()"></label>`;toast(ok?"Enlace copiado: envíalo por WhatsApp.":"Copia el enlace y envíalo por WhatsApp.")}catch(x){toast("Se necesita señal para crear el enlace.")}el.disabled=false;break}
+    case "invAsis":{el.disabled=true;try{const u=await window.invitacionAsistente();let ok=false;try{await navigator.clipboard.writeText(u);ok=true}catch(x){}S._inv=u;render();toast(ok?"Enlace copiado: envíalo por WhatsApp.":"Copia el enlace y envíalo por WhatsApp.")}catch(x){toast("Se necesita señal para crear el enlace.")}el.disabled=false;break}
     case "logout":window.cerrarSesion&&window.cerrarSesion();break;
     case "importDrive":{const link=($("#drvCarpeta").value||"").trim();if(!link){toast("Escribe el nombre o el enlace de la carpeta.");return}LS.set("drvCarpeta",link);el.disabled=true;el.textContent="Importando… (puede tardar un minuto)";
       try{const r=await window.importarCarpetaDrive(link);const n=Object.keys(r.jugadores||{}).length;
