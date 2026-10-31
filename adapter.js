@@ -241,6 +241,14 @@ const mcp = {
   }
 };
 window.probarPuente = async (url, clave) => fetch(url, { method: "POST", body: JSON.stringify({ clave, op: "ping" }) }).then(x => x.json());
+window.importarCarpetaDrive = async link => {
+  const r = await puente({ op: "importarCarpeta", carpeta: link }, 330000);
+  // Las fotos reimportadas conservan su identificador: se borra la copia local para traer la nueva.
+  const ids = Object.values(r.jugadores || {}).concat([r.logo, r.dt].filter(Boolean));
+  ids.forEach(id => { delete fotos[id]; idbDel(id); faltan.add(id); });
+  setTimeout(pedirFotos, 100);
+  return r;
+};
 window.invitacionAsistente = async () => {
   const r = await puente({ op: "invitacion" });
   const tok = btoa(unescape(encodeURIComponent(JSON.stringify({ url: cfg.url, clave: r.claveAsistente }))));
