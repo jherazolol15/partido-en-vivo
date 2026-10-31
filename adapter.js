@@ -173,7 +173,7 @@ function idbAll() {
 }
 function idbPut(id, v) { try { idb && idb.transaction("f", "readwrite").objectStore("f").put(v, id); } catch (e) {} }
 function idbDel(id) { try { idb && idb.transaction("f", "readwrite").objectStore("f").delete(id); } catch (e) {} }
-const PIXEL = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
+const PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const faltan = new Set();
 window.blobUrl = id => { if (!id) return PIXEL; if (fotos[id]) return fotos[id]; faltan.add(id); return PIXEL; };
 let pidiendo = false;
