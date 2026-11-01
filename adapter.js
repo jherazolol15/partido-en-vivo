@@ -12,9 +12,9 @@ const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 let cfg = ls.get("cfg", null); // {url, clave, rol, uid, nombre}
 function leerInvitacion() {
   const h = location.hash || "";
-  const m = /#inv=([^&]+)/.exec(h);
+  const m = /#(inv|ver)=([^&]+)/.exec(h);
   if (!m) return null;
-  try { const o = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1]))))); history.replaceState(null, "", location.pathname); return o; } catch (e) { return null; }
+  try { const o = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[2]))))); history.replaceState(null, "", location.pathname); o.ver = m[1] === "ver"; return o; } catch (e) { return null; }
 }
 
 // ---------- Llamadas al puente ----------
@@ -105,8 +105,39 @@ const db = { doc: docRef, collection: colRef };
 
 // ---------- Ciclo de sincronización ----------
 let syncing = false, lastOk = 0, lastErr = null;
+// Enlace para padres: solo lectura, cada 15 s, con un resumen preparado por el puente.
+let ultimaVista = 0;
+async function syncVista() {
+  if (Date.now() - ultimaVista < (window.__aficMs || 15000)) return;
+  ultimaVista = Date.now();
+  const r = await puente({ op: "vista" }, 30000);
+  const nuevo = {}, t = Date.now();
+  const put = (ruta, data) => { if (data != null) nuevo[ruta] = { data, actualizado: t }; };
+  put("config/estado", { actual: r.actual || null });
+  put("config/marca", r.marca || {});
+  if (r.escudos) put("config/escudos", r.escudos);
+  if (r.actual) {
+    put("partidos/" + r.actual, r.partido || {});
+    (r.eventos || []).forEach(e => put("partidos/" + r.actual + "/eventos/" + e.id, e));
+    put("config/plantilla", { jugadores: r.jugadores || [] });
+    put("config/fotos", { map: r.fotos || {} });
+  }
+  const tocadas = [];
+  new Set(Object.keys(mirror).concat(Object.keys(nuevo))).forEach(k => {
+    if (JSON.stringify(mirror[k] && mirror[k].data) !== JSON.stringify(nuevo[k] && nuevo[k].data)) tocadas.push(k);
+  });
+  mirror = nuevo; saveMirror();
+  if (tocadas.length) notify(tocadas);
+}
 async function sync() {
   if (syncing || !cfg || !navigator.onLine) return;
+  if (cfg.rol === "afic") {
+    syncing = true;
+    try { await syncVista(); lastOk = Date.now(); lastErr = null; pedirFotos(); }
+    catch (e) { lastErr = e; if (e && e.code === "needs_reauth") gate(card(`<h2>El enlace ya no es válido</h2><p class="hint">Pide al entrenador el enlace nuevo para ver el partido.</p><button class="btn wide" onclick="cerrarSesion()">Salir</button>`)); }
+    finally { syncing = false; }
+    return;
+  }
   syncing = true;
   try {
     // 1. Enviar pendientes (de a 20)
@@ -304,6 +335,11 @@ window.importarEscudosDrive = async (carpeta, progreso) => {
   if (typeof window.render === "function") try { window.render(); } catch (e) {}
   return r;
 };
+window.invitacionPadres = async renovar => {
+  const r = await puente({ op: renovar ? "renovarAfic" : "invitacionAfic" });
+  const tok = btoa(unescape(encodeURIComponent(JSON.stringify({ url: cfg.url, clave: r.claveAfic }))));
+  return location.origin + location.pathname + "#ver=" + encodeURIComponent(tok);
+};
 window.invitacionAsistente = async () => {
   const r = await puente({ op: "invitacion" });
   const tok = btoa(unescape(encodeURIComponent(JSON.stringify({ url: cfg.url, clave: r.claveAsistente }))));
@@ -363,10 +399,25 @@ function pantallaAcceso(pre, msg) {
 // ---------- Arranque ----------
 (async function arranque() {
   const inv = leerInvitacion();
+  if (inv && inv.ver && inv.url && inv.clave) {
+    const abrir = async () => {
+      gate(card(`<h2 style="text-align:center">Partido en vivo</h2><p class="hint" style="text-align:center">Abriendo el partido…</p>`));
+      try { ls.del("mirror"); ls.del("since"); await entrar(inv.url, inv.clave, "Aficionado"); location.reload(); }
+      catch (e) { gate(card(`<h2>El enlace ya no es válido</h2><p class="hint">Pide al entrenador el enlace nuevo para ver el partido.</p>`)); }
+    };
+    if (cfg && cfg.rol !== "afic") {
+      gate(card(`<h2>Enlace para padres</h2><p class="hint">Este teléfono ya tiene la app abierta como ${cfg.rol === "dt" ? "DT" : "asistente"}. Si continúas como aficionado, se cerrará esa sesión.</p><button class="btn pri wide" id="afSi">Ver como aficionado</button><button class="btn wide" id="afNo">Seguir como ${cfg.rol === "dt" ? "DT" : "asistente"}</button>`));
+      document.getElementById("afSi").onclick = abrir;
+      document.getElementById("afNo").onclick = () => location.reload();
+      return;
+    }
+    await abrir(); return;
+  }
   if (inv && inv.url && inv.clave) { pantallaAcceso({ url: inv.url, clave: inv.clave }, ""); return; }
   if (!cfg) { pantallaAcceso(null, ""); return; }
   await abrirIDB(); await idbAll();
   gate("");
+  window.__esAfic = cfg.rol === "afic";
   if (window.__setReady) window.__setReady(api);
   kick();
 })();

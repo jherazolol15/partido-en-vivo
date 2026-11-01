@@ -179,6 +179,7 @@ nav.tabs button.on{color:var(--accent);border-top-color:var(--accent)}
 .minbox .btn{min-width:50px;padding:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;max-width:90%;text-align:center}
 .tbl{overflow-x:auto}
+.av.mvp{width:110px;height:110px;border-color:var(--yellow);border-width:4px}
 .escrow{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:500}
 .escrow .crest{margin:0}
 .lnk{background:none;border:0;padding:4px 2px;color:var(--muted);font-size:.78rem;text-decoration:underline;text-underline-offset:2px;min-height:28px}
@@ -565,6 +566,7 @@ function renderBoard(){
     ${pend?`<span class="pill sync-wait"><span class="dot"></span>${S.online?"Enviando":"Sin señal"}: ${pend}</span>`:`<span class="pill sync-ok"><span class="dot"></span>${S.db?"Al día":"Solo este teléfono"}</span>`}${S.hoja?.test?'<span class="pill test">Hoja de pruebas</span>':""}<button class="thm" data-act="theme" aria-label="Cambiar entre modo día y noche">${themeIcon()}</button></div>`;
 }
 function renderTabs(){
+  if(S.viewer){$("#tabs").hidden=true;return}
   const tabs=S.isOwner?[["partido","Partido"],["vivo","En vivo"],["cierre","Cierre"],["informe","Informe"],["ajustes","Ajustes"]]:[["vivo","En vivo"]];
   if(!tabs.find(t=>t[0]===S.view))S.view="vivo";
   $("#tabsIn").innerHTML=tabs.map(([k,l])=>`<button data-act="tab" data-v="${k}" class="${S.view===k?"on":""}">${l}</button>`).join("");
@@ -577,7 +579,7 @@ function render(){
   if(escribiendo()){clearTimeout(S._rt);S._rt=setTimeout(()=>{S._rt=null;render()},700);return}
   clearTimeout(S._rt);S._rt=null;
   const v=S.view;let html="";
-  if(v==="partido")html=viewPartido();else if(v==="vivo")html=viewVivo();else if(v==="cierre")html=viewCierre();else if(v==="informe")html=viewInforme();else html=viewAjustes();
+  if(S.viewer)html=viewAfic();else if(v==="partido")html=viewPartido();else if(v==="vivo")html=viewVivo();else if(v==="cierre")html=viewCierre();else if(v==="informe")html=viewInforme();else html=viewAjustes();
   const main=$("#main");const y=window.scrollY;const ae=document.activeElement;const fid=ae&&ae.id&&main.contains(ae)?ae.id:null;let ss=null;try{ss=fid&&ae.selectionStart!=null?[ae.selectionStart,ae.selectionEnd]:null}catch(e){}
   main.innerHTML=html;window.scrollTo(0,y);
   if(fid){const n=document.getElementById(fid);if(n){n.focus({preventScroll:true});if(ss)try{n.setSelectionRange(ss[0],ss[1])}catch(e){}}}
@@ -660,7 +662,7 @@ function pitchHtml(coords,slots,opt){
   const st=opt.state;
   const toks=coords.map((c,i)=>{const id=slots[i];const p=id?player(id):null;
     let cards="";if(st&&id&&st.st[id]){const s=st.st[id];cards=`<span class="cards">${s.am?'<i class="card-y"></i>':""}${s.am>1||s.ro?'<i class="card-r"></i>':""}</span>`}
-    const act=opt.mode==="setup"?"slot":"onfield";
+    const act=opt.mode==="setup"?"slot":(opt.mode==="view"?"":"onfield");
     return `<button class="tok" data-act="${act}" data-i="${i}" data-id="${id||""}" style="left:${c[1]}%;top:${c[2]}%">${cards}${st&&id?`<span class="mins">${liveMins(st,id)}'</span>`:""}${id?avatar(id):`<span class="av empty">+</span>`}<span class="lb">${p?(p.dorsal?esc(p.dorsal)+" · ":"")+esc(shortName(id)):'<span class="code">'+esc(c[0])+"</span>"}</span></button>`}).join("");
   return `<div class="pitch" id="pitch">${lines}${toks}</div>`;
 }
@@ -709,6 +711,21 @@ async function saveMatch(){
 }
 
 /* ============ Vista: En vivo ============ */
+/* ============ Vista: padres y aficionados (solo lectura) ============ */
+function viewAfic(){
+  const salir=`<button class="lnk" data-act="salirAfic" style="align-self:center">Salir</button>`;
+  if(!S.match)return `<section class="sec empty-state"><h2>No hay partido en curso</h2><p class="hint">Cuando el entrenador active el partido, lo verás aquí minuto a minuto. La página se actualiza sola.</p></section>${salir}`;
+  const m=S.match;const st=computeState(activeEvents());const c=clockState();
+  const onField=new Set(st.slots.filter(Boolean));const bench=(m.convocados||[]).filter(id=>!onField.has(id));
+  const evs=activeEvents().filter(e=>e.tipo!=="formacion").slice().reverse();
+  const info=[m.competicion,m.fecha?dmy(m.fecha):"",m.hora,m.lugar].filter(Boolean).join(" · ");
+  return `<section class="sec"><div class="clock ${c.over?"over":""}"><span class="t num" data-clock>${clockText()}</span><span class="p" data-clocklabel>${esc(c.label)}</span></div>${info?`<p class="hint" style="text-align:center">${esc(info)}</p>`:""}</section>
+  ${m.mvp&&m.reloj?.fin2?`<section class="sec" style="align-items:center;text-align:center"><h3>Jugador del partido</h3>${avatar(m.mvp,"mvp")}<strong>${esc(player(m.mvp)?.nombre||"")}</strong></section>`:""}
+  <section class="sec"><h3>En cancha · ${esc(st.formacion||"")}</h3>${pitchHtml(st.coords,st.slots,{mode:"view",state:st})}</section>
+  ${bench.length?`<section class="sec"><h3>Suplentes</h3><div class="plist">${bench.map(id=>{const p=player(id);const mn=liveMins(st,id);return `<div class="prow">${avatar(id)}<span class="meta"><span class="nm">${esc(p?.nombre||id)}</span><span class="ps">${esc([p?.dorsal?"#"+p.dorsal:"",mn?mn+"' jugados":""].filter(Boolean).join(" · "))}</span></span></div>`}).join("")}</div></section>`:""}
+  <section class="sec"><h3>Minuto a minuto</h3>${evs.length?`<ul class="tl">${evs.map(e=>`<li><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}</span></li>`).join("")}</ul>`:'<p class="hint">Aquí aparecerán los goles, tarjetas y cambios.</p>'}</section>
+  <p class="hint" style="text-align:center">La página se actualiza sola.</p>${salir}`;
+}
 function viewVivo(){
   if(!S.match)return `<section class="sec empty-state"><h2>Sin partido activo</h2><p class="hint">${S.isOwner?"Arma la convocatoria y la alineación en la pestaña Partido.":"Cuando el DT active el partido, aparecerá aquí."}</p>${S.isOwner?'<button class="btn pri" data-act="tab" data-v="partido">Ir a Partido</button>':'<button class="btn" data-act="logout">Cerrar sesión en este teléfono</button>'}</section>`;
   const st=computeState(activeEvents());const c=clockState();
@@ -732,10 +749,11 @@ function viewVivo(){
    <section class="sec"><div class="row" style="justify-content:space-between"><h3>Banco</h3><span class="pill num" style="background:${cambiosAgotados()?"var(--danger)":"var(--surface-2)"};color:${cambiosAgotados()?"#fff":"var(--ink)"}">Cambios ${nCambios()}${S.match.maxCambios?" / "+S.match.maxCambios:""}</span></div><div class="bench">${bench.length?bench.map(id=>`<button data-act="benchP" data-id="${id}" class="${out.has(id)?"out":""}">${avatar(id)}<span class="lb">${esc(shortName(id))}</span><span class="mn">${liveMins(st,id)}'</span></button>`).join(""):'<span class="hint">Sin suplentes.</span>'}</div></section>
    ${S.isOwner?"":'<button class="btn sm" data-act="logout" style="align-self:center">Cerrar sesión en este teléfono</button>'}<section class="sec"><h3>Eventos</h3>${evs.length?`<ul class="tl">${evs.map(evRow).join("")}</ul>`:'<p class="hint">Los goles, tarjetas y cambios aparecerán aquí con su minuto.</p>'}</section>`;
 }
-function evIcon(e){return {gol:"⚽",gol_rival:"⚽",amarilla:'<i class="card-y"></i>',roja:'<i class="card-r"></i>',cambio:"⇄",penal_atajado:"🧤",lesion:"✚",formacion:"▦",nota:"✎",amon_ct:e.color==="roja"?'<i class="card-r"></i>':'<i class="card-y"></i>'}[e.tipo]||"·"}
+function evIcon(e){return {gol:"⚽",gol_rival:"⚽",amarilla:'<i class="card-y"></i>',roja:'<i class="card-r"></i>',cambio:"⇄",penal_atajado:"🧤",lesion:"✚",atencion:"✚",formacion:"▦",nota:"✎",amon_ct:e.color==="roja"?'<i class="card-r"></i>':'<i class="card-y"></i>'}[e.tipo]||"·"}
 function evText(e){
-  const n=id=>id?esc(shortName(id)):"";
+  const n=id=>id?esc(S.viewer?(player(id)?.nombre||id):shortName(id)):"";
   switch(e.tipo){
+    case "atencion":return "Atención médica";
     case "gol":return `Gol de ${e.jugador?n(e.jugador):"autogol del rival"}${e.rel?`<small>Asistencia: ${n(e.rel)}</small>`:""}`;
     case "gol_rival":return `Gol de ${esc(S.match?.rival||"rival")}${e.detalle?`<small>${esc(e.detalle)}</small>`:""}`;
     case "amarilla":return `Amarilla a ${n(e.jugador)}`;
@@ -1090,6 +1108,9 @@ function viewAjustes(){
   <section class="sec"><h2>Acceso y asistentes</h2><p class="hint">Entraste como <strong>${S.isOwner?"DT":"asistente"}</strong>. Para que un asistente o PF anote desde su teléfono, envíale el enlace de invitación: al abrirlo, su app queda configurada con la clave de asistente (solo puede ver el partido, mover el reloj y registrar eventos).</p>
    <button class="btn sky wide" data-act="invAsis">Copiar enlace para asistente</button><div id="invOut">${S._inv?`<label class="f">Enlace para el asistente<input id="invLink" class="tin" readonly value="${esc(S._inv)}" onclick="this.select()"></label>`:""}</div>
    <button class="btn wide" data-act="logout">Cerrar sesión en este teléfono</button></section>
+  ${S.isOwner?`<section class="sec"><h2>Enlace para padres</h2><p class="hint">Quien abra este enlace ve el partido activo minuto a minuto: marcador, alineación, cambios, tarjetas y goles. No ve notas, valoraciones, lesiones ni datos de la hoja, y no puede anotar nada.</p>
+   <button class="btn sky wide" data-act="invPadres">Copiar enlace para padres</button>${S._invP?`<label class="f">Enlace para padres<input id="invPLink" class="tin" readonly value="${esc(S._invP)}" onclick="this.select()"></label>`:""}
+   <button type="button" class="lnk" data-act="renovarPadres" style="align-self:flex-start">Cambiar enlace (el anterior deja de funcionar)</button></section>`:""}
   ${registroHtml()}
   ${S.match?`<section class="sec"><h2>Partido activo</h2><p class="hint">${esc(S.match.rival||"")} · ${esc(dmy(S.match.fecha))}</p><button class="btn wide" data-act="closeMatch">Cerrar partido activo</button></section>`:""}`;
 }
@@ -1253,6 +1274,9 @@ document.addEventListener("click",async ev=>{
       try{const r=await window.importarEscudosDrive(c,(n,t)=>{el.textContent=`Preparando escudos… ${n} de ${t}`});const E={lista:r.escudos||[],alias:Object.assign({},S.escudos?.alias||{})};S.escudos=E;cacheLocal();await writeDoc("config/escudos",E);render();toast(`${E.lista.length} escudos importados`+(r.omitidos&&r.omitidos.length?` · sin usar: ${r.omitidos.slice(0,3).join(", ")}`:""))}
       catch(x){const m={carpeta_invalida:"Escribe el nombre o el enlace de la carpeta.",carpeta_no_encontrada:"No se encontró la carpeta en tu Drive.",server_unavailable:"Sin señal o el puente no respondió.",sin_permiso:"Solo el DT puede importar escudos."}[x&&x.code];toast(m||("No se pudo importar: "+((x&&(x.message||x.code))||"error")))}
       el.disabled=false;el.textContent="Importar escudos desde Drive";break}
+    case "salirAfic":window.cerrarSesion&&window.cerrarSesion();break;
+    case "invPadres":{el.disabled=true;try{const u=await window.invitacionPadres(false);let ok=false;try{await navigator.clipboard.writeText(u);ok=true}catch(x){}S._invP=u;render();toast(ok?"Enlace copiado: compártelo en el grupo de padres.":"Copia el enlace y compártelo en el grupo de padres.")}catch(x){toast("Se necesita señal para crear el enlace.")}el.disabled=false;break}
+    case "renovarPadres":{if(!S._renP||Date.now()-S._renP>6000){S._renP=Date.now();toast("Toca de nuevo para confirmar: el enlace actual dejará de funcionar.");return}S._renP=0;el.disabled=true;try{const u=await window.invitacionPadres(true);S._invP=u;try{await navigator.clipboard.writeText(u)}catch(x){}render();toast("Enlace nuevo creado. El anterior ya no funciona.")}catch(x){toast("Se necesita señal para cambiar el enlace.")}el.disabled=false;break}
     case "saveCortos":{const o={};document.querySelectorAll("[data-cor]").forEach(i=>{const v=i.value.trim();if(v)o[i.dataset.cor]=v});S.cortos=o;cacheLocal();try{await writeDoc("config/cortos",{map:o})}catch(e){}toast("Nombres guardados.");break}
     case "saveStaff":{const o={};document.querySelectorAll("[data-cfg]").forEach(i=>o[i.dataset.cfg]=i.value.trim());S.staff=o;cacheLocal();try{await writeDoc("config/staff",o)}catch(e){}toast("Cuerpo técnico guardado.");break}
     case "openMatch":{S.estado={actual:id};try{await writeDoc("config/estado",S.estado)}catch(e){}subscribeMatch(id);S.view="cierre";render();window.scrollTo(0,0);toast("Partido abierto.");break}
@@ -1314,6 +1338,7 @@ render();
   const C=window.claude;
   const [db,user,assets,mcp,dl]=await Promise.all(["db","user","assets","mcp","downloads"].map(n=>C&&C.use?C.use(n).catch(()=>null):Promise.resolve(null)));
   Object.assign(S,{db,user,assets,mcp,dl});
+  S.viewer=window.__esAfic===true;
   if(user){try{S.isOwner=await user.isOwner();S.uid=await user.id()}catch(e){}}
   else S.isOwner=true; // sin plataforma: modo local de un solo teléfono
   if(!S.isOwner&&S.view!=="vivo")S.view="vivo";
