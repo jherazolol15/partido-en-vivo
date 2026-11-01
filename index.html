@@ -179,6 +179,13 @@ nav.tabs button.on{color:var(--accent);border-top-color:var(--accent)}
 .minbox .btn{min-width:50px;padding:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;max-width:90%;text-align:center}
 .tbl{overflow-x:auto}
+.escrow{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:500}
+.escrow .crest{margin:0}
+.lnk{background:none;border:0;padding:4px 2px;color:var(--muted);font-size:.78rem;text-decoration:underline;text-underline-offset:2px;min-height:28px}
+.escgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:52vh;overflow:auto}
+.escgrid button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:12px;background:var(--surface-2);border:2px solid transparent;font-size:.72rem;font-weight:600;line-height:1.1;min-height:92px}
+.escgrid button.on{border-color:var(--accent);background:var(--surface)}
+.escgrid img,.escgrid svg{width:44px;height:44px;object-fit:contain}
 .ihd{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border-radius:12px}
 .ihd .t{font-family:var(--display);font-weight:700;font-size:1.1rem;text-transform:uppercase;letter-spacing:.03em;line-height:1.1;overflow-wrap:anywhere}
 .ihd .t.r{text-align:right}
@@ -282,7 +289,7 @@ const TIPO_TXT = {gol:"Gol",gol_rival:"Gol rival",amarilla:"Amarilla",roja:"Roja
 const S = {
   db:null, user:null, assets:null, mcp:null, dl:null,
   isOwner:false, canWrite:true, uid:null, ready:false,
-  roster:null, fotos:{}, forms:{}, estado:{actual:null}, staff:null, marca:{}, hoja:{test:false,testId:""},
+  roster:null, fotos:{}, forms:{}, estado:{actual:null}, staff:null, marca:{}, hoja:{test:false,testId:""}, escudos:{lista:[],alias:{}},
   mid:null, match:null, events:[], queue:[],
   view:"vivo", draft:null, dragMode:false, sheetMatches:null,
   online:navigator.onLine, syncing:false, confirmSync:false, syncLog:[]
@@ -296,7 +303,14 @@ function rivalInitials(name){const stop=new Set(["FC","F.C.","CD","C.D.","CLUB",
   const w=String(name||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().split(/[\s\-.]+/).filter(x=>x&&!stop.has(x)&&!/^\d/.test(x));
   if(!w.length)return "R";if(w.length===1)return w[0].slice(0,2);return (w[0][0]+w[1][0])}
 function rivalHue(name){let h=0;for(const ch of String(name||""))h=(h*31+ch.charCodeAt(0))>>>0;return h%360}
-function rivalCrest(name,px){const t=rivalInitials(name),h=rivalHue(name);return `<svg class="crest" width="${px||30}" height="${Math.round((px||30)*46/40)}" viewBox="0 0 40 46" aria-hidden="true"><path d="${SHIELD}" fill="hsl(${h} 42% 36%)" stroke="#fff" stroke-width="2.2"/><path d="M4 17 H36" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/><text x="20" y="${t.length>1?32:33}" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif" font-weight="800" font-size="${t.length>1?15:18}" fill="#fff">${esc(t)}</text></svg>`}
+const ESC_STOP=new Set(["FC","F","C","CLUB","CD","DEPORTIVO","ESCUELA","CORPORACION","ASOCIACION"]);
+function escKey(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]+/g," ").trim()}
+function escCore(s){return escKey(s).split(" ").filter(w=>w&&!ESC_STOP.has(w)).join(" ")}
+function escudoId(name){const E=S.escudos||{};const k=escKey(name);if(!k)return null;const L=E.lista||[];const al=(E.alias||{})[k];if(al==="none")return null;if(al&&L.some(e=>e.id===al))return al;
+  let f=L.filter(e=>escKey(e.nombre)===k);if(f.length===1)return f[0].id;const c=escCore(name);if(!c)return null;f=L.filter(e=>escCore(e.nombre)===c);return f.length===1?f[0].id:null}
+function rivalCrestIni(name,px){const t=rivalInitials(name),h=rivalHue(name);return `<svg class="crest" width="${px||30}" height="${Math.round((px||30)*46/40)}" viewBox="0 0 40 46" aria-hidden="true"><path d="${SHIELD}" fill="hsl(${h} 42% 36%)" stroke="#fff" stroke-width="2.2"/><text x="20" y="${t.length>1?32:33}" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif" font-weight="800" font-size="${t.length>1?15:18}" fill="#fff">${esc(t)}</text></svg>`}
+function rivalCrest(name,px){const eid=escudoId(name);if(eid)return `<img class="crest" src="${blobUrl(eid)}" alt="" style="width:${px||30}px;height:${Math.round((px||30)*46/40)}px">`;
+const t=rivalInitials(name),h=rivalHue(name);return `<svg class="crest" width="${px||30}" height="${Math.round((px||30)*46/40)}" viewBox="0 0 40 46" aria-hidden="true"><path d="${SHIELD}" fill="hsl(${h} 42% 36%)" stroke="#fff" stroke-width="2.2"/><path d="M4 17 H36" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/><text x="20" y="${t.length>1?32:33}" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif" font-weight="800" font-size="${t.length>1?15:18}" fill="#fff">${esc(t)}</text></svg>`}
 function drawRivalCrest(g,name,cx,cy,w){const t=rivalInitials(name),h=rivalHue(name);const sc=w/40;g.save();g.translate(cx-w/2,cy-23*sc);g.scale(sc,sc);const p=new Path2D(SHIELD);g.fillStyle=`hsl(${h} 42% 36%)`;g.fill(p);g.lineWidth=2.2;g.strokeStyle="#fff";g.stroke(p);g.strokeStyle="rgba(255,255,255,.35)";g.lineWidth=1.5;g.beginPath();g.moveTo(4,17);g.lineTo(36,17);g.stroke();g.fillStyle="#fff";g.textAlign="center";g.font=`800 ${t.length>1?15:18}px "Barlow Condensed", "Arial Narrow", Arial, sans-serif`;g.fillText(t,20,t.length>1?32:33);g.restore()}
 const cl = o => o==null?o:JSON.parse(JSON.stringify(o));
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -406,8 +420,8 @@ function finalStats(){
 }
 
 /* ============ Persistencia ============ */
-function cacheLocal(){LS.set("cache",{roster:S.roster,fotos:S.fotos,forms:S.forms,estado:S.estado,mid:S.mid,match:S.match,events:S.events,staff:S.staff,marca:S.marca,hoja:S.hoja,cortos:S.cortos})}
-function loadLocal(){const c=LS.get("cache",null);if(c){Object.assign(S,{roster:c.roster||null,fotos:c.fotos||{},forms:c.forms||{},estado:c.estado||{actual:null},mid:c.mid||null,match:c.match||null,events:c.events||[],staff:c.staff||null,marca:c.marca||{},hoja:c.hoja||{test:false,testId:""},cortos:c.cortos||{}})}S.queue=LS.get("queue",[]);S.draft=LS.get("draft",null)}
+function cacheLocal(){LS.set("cache",{roster:S.roster,fotos:S.fotos,forms:S.forms,estado:S.estado,mid:S.mid,match:S.match,events:S.events,staff:S.staff,marca:S.marca,hoja:S.hoja,cortos:S.cortos,escudos:S.escudos})}
+function loadLocal(){const c=LS.get("cache",null);if(c){Object.assign(S,{roster:c.roster||null,fotos:c.fotos||{},forms:c.forms||{},estado:c.estado||{actual:null},mid:c.mid||null,match:c.match||null,events:c.events||[],staff:c.staff||null,marca:c.marca||{},hoja:c.hoja||{test:false,testId:""},cortos:c.cortos||{},escudos:c.escudos||{lista:[],alias:{}}})}S.queue=LS.get("queue",[]);S.draft=LS.get("draft",null)}
 function saveQueue(){LS.set("queue",S.queue)}
 function saveDraft(){LS.set("draft",S.draft)}
 
@@ -598,7 +612,7 @@ function viewPartido(){
   html+=`<div class="grid2">
     <label class="f">Fecha<input type="date" id="f_fecha" data-inp="fecha" value="${esc(d.fecha)}"></label>
     <label class="f">Competición<select id="f_comp" data-inp="comp">${comps.map(c=>`<option ${c===d.comp?"selected":""}>${esc(c)}</option>`).join("")}</select></label>
-    <label class="f">Rival<input id="f_rival" data-inp="rival" value="${esc(d.rival)}" placeholder="Nombre del rival" autocomplete="off"></label>
+    <label class="f">Rival<input id="f_rival" data-inp="rival" value="${esc(d.rival)}" placeholder="Nombre del rival" autocomplete="off">${(S.escudos?.lista||[]).length?`<span class="escrow"><span id="escMini">${rivalCrest(d.rival,20)}</span><button type="button" class="lnk" data-act="escPick">Cambiar escudo</button></span>`:""}</label>
     <label class="f">Localía<select id="f_loc" data-inp="loc">${["Local","Visitante","Neutral"].map(c=>`<option ${c===d.loc?"selected":""}>${c}</option>`).join("")}</select></label>
     <label class="f">Micro #<input id="f_micro" data-inp="micro" inputmode="numeric" value="${esc(d.micro)}"></label>
     <label class="f">Duración (min)<select id="f_dur" data-inp="dur">${[80,70,60,90].map(n=>`<option ${Number(d.dur)===n?"selected":""}>${n}</option>`).join("")}</select></label>
@@ -1009,7 +1023,7 @@ async function buildReport(){
   const local=m.localia!=="Visitante";const L=local?TEAM:m.rival,R=local?m.rival:TEAM;
   const sL=local?fs.gf:fs.gc,sR=local?fs.gc:fs.gf;
   g.font=`800 56px ${D}`;wrapText(g,L.toUpperCase(),262,262,330,58);wrapText(g,R.toUpperCase(),W-262,262,330,58);
-  {const rx=local?W-262:262,ux=local?262:W-262;drawRivalCrest(g,m.rival,rx,362,60);if(mk.logo){try{const li=await loadImg(blobUrl(mk.logo));g.drawImage(li,ux-33,328,66,66)}catch(e){}}g.fillStyle="#fff";g.textAlign="center"}
+  {const rx=local?W-262:262,ux=local?262:W-262;await drawCrest(g,m.rival,rx,362,60);if(mk.logo){try{const li=await loadImg(blobUrl(mk.logo));g.drawImage(li,ux-33,328,66,66)}catch(e){}}g.fillStyle="#fff";g.textAlign="center"}
   g.font=`800 190px ${D}`;g.fillText(sL+"–"+sR,W/2,335);
   const epx=m.estadoPartido;const res=(epx&&epx.estado!=="Finalizado")?(epx.estado.toUpperCase()+" · MIN "+epx.minuto+(epx.motivo?" · "+epx.motivo.toUpperCase():"")):(fs.gf>fs.gc?"VICTORIA":fs.gf===fs.gc?"EMPATE":"DERROTA");
   g.font=`700 38px ${D}`;g.fillStyle="#5bc2e7";g.fillText(res,W/2,425);
@@ -1040,6 +1054,7 @@ async function buildReport(){
   g.textAlign="center";g.fillStyle="rgba(255,255,255,.75)";g.font=`600 28px ${D}`;g.fillText("JAGUARES DE CÓRDOBA · SUB-15 · DT "+(defaultStaff().dt||"").toUpperCase(),W/2,H-70);
   return new Promise(res=>cv.toBlob(b=>res({blob:b,url:cv.toDataURL("image/png")}),"image/png"));
 }
+async function drawCrest(g,name,cx,cy,w){const eid=escudoId(name);if(eid){try{const im=await loadImg(blobUrl(eid));const b=w*1.1;const k=Math.min(b/im.width,b/im.height);g.drawImage(im,cx-im.width*k/2,cy-im.height*k/2,im.width*k,im.height*k);return}catch(e){}}drawRivalCrest(g,name,cx,cy,w)}
 function wrapText(g,t,x,y,maxW,lh){const w=t.split(" ");let line="",lines=[];for(const s of w){const tt=line?line+" "+s:s;if(g.measureText(tt).width>maxW&&line){lines.push(line);line=s}else line=tt}lines.push(line);lines.slice(0,2).forEach((l,i)=>g.fillText(l,x,y+(i-(Math.min(lines.length,2)-1)/2)*lh))}
 function loadImg(u){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u})}
 
@@ -1053,6 +1068,8 @@ function viewAjustes(){
    ${S.assets?`<button class="btn sm" data-act="pick" data-for="logoIn">Subir escudo</button>`:""}
    <div class="brand">${mk.dt?`<span class="av"><img src="${blobUrl(mk.dt)}" alt=""></span>`:'<span class="av">DT</span>'}<div class="meta"><strong>${esc(defaultStaff().dt)}</strong><p class="hint">Tu foto aparece en el informe y en la imagen para WhatsApp.</p></div></div>
    ${S.assets?`<button class="btn sm" data-act="pick" data-for="dtIn">Subir mi foto</button>`:'<div class="banner warn">Solo quien edita la app puede subir imágenes.</div>'}</section>
+  ${typeof window.importarEscudosDrive==="function"?`<section class="sec"><h2>Escudos de rivales</h2><p class="hint">Se toman de tu carpeta de Drive con los escudos nombrados como cada club (por ejemplo «ESTRELLAS DE TIERRALTA.png»). La app pone el escudo según el nombre del rival; si alguno no corresponde, cámbialo con «Cambiar escudo» en la pestaña Partido.${(S.escudos?.lista||[]).length?` <strong>${S.escudos.lista.length} escudos importados.</strong>`:""}</p>
+   <label class="f">Carpeta de Drive (nombre o enlace)<input id="escCarpeta" value="${esc(LS.get("escCarpeta","ESCUDOS"))}"></label><button class="btn pri wide" data-act="importEsc">Importar escudos desde Drive</button></section>`:""}
   <section class="sec"><h2>Hoja de pruebas</h2><p class="hint">Para probar la sincronización sin tocar tus datos: en Google Drive abre tu hoja, usa Archivo → Hacer una copia y pega aquí el enlace de la copia.</p>
    <label class="f">Enlace o ID de la copia<input id="hojaId" value="${esc(S.hoja?.testId||"")}" placeholder="https://docs.google.com/spreadsheets/d/…"></label>
    <label class="row" style="gap:8px"><input type="checkbox" id="hojaTest" ${S.hoja?.test?"checked":""} style="width:22px;height:22px"><span>Usar la hoja de pruebas</span></label>
@@ -1224,6 +1241,18 @@ document.addEventListener("click",async ev=>{
       finally{render()}break}
     case "faseLvl":{const c=cierre();const k=el.dataset.k,n=Number(el.dataset.n);const f=c.fases[k]=c.fases[k]||{};f.n=f.n===n?null:n;saveCierre(true);break}
     case "star":{const c=cierre();c.dest[id]=c.dest[id]!=null?null:"";saveCierre(true);break}
+    case "escPick":{const nm=(S.draft&&S.draft.rival)||S.match?.rival||"";if(!String(nm).trim()){toast("Primero escribe el nombre del rival.");return}S._escFor=nm;
+      const L=S.escudos?.lista||[];const k=escKey(nm);const al=(S.escudos?.alias||{})[k];const cur=escudoId(nm);
+      sheet(`<h2>Escudo de ${esc(nm)}</h2><p class="hint">Automático usa el escudo cuyo nombre coincide con el del rival. Lo que elijas aquí se recuerda para los próximos partidos contra este rival.</p>
+       <input id="escQ" data-inp="escQ" class="tin" placeholder="Buscar escudo…" autocomplete="off">
+       <div class="escgrid" id="escGrid"><button class="${!al?"on":""}" data-act="escSet" data-v="auto"><span style="font-size:1.6rem">⟳</span>Automático</button><button class="${al==="none"?"on":""}" data-act="escSet" data-v="none">${rivalCrestIni(nm,40)}Iniciales</button>
+       ${L.map(e=>`<button class="${al&&al===e.id||(!al&&cur===e.id)?"on":""}" data-act="escSet" data-v="${esc(e.id)}" data-nm="${esc(escKey(e.nombre))}"><img src="${blobUrl(e.id)}" alt="">${esc(e.nombre)}</button>`).join("")}</div>
+       <button class="btn wide" data-act="close">Cerrar</button>`);break}
+    case "escSet":{const k=escKey(S._escFor);const E={lista:(S.escudos?.lista||[]),alias:Object.assign({},S.escudos?.alias||{})};const v=el.dataset.v;if(v==="auto")delete E.alias[k];else E.alias[k]=v;S.escudos=E;cacheLocal();try{await writeDoc("config/escudos",E)}catch(e){}closeSheet();render();toast("Escudo actualizado.");break}
+    case "importEsc":{const c=(($("#escCarpeta")||{}).value||"ESCUDOS").trim()||"ESCUDOS";LS.set("escCarpeta",c);el.disabled=true;el.textContent="Buscando la carpeta…";
+      try{const r=await window.importarEscudosDrive(c,(n,t)=>{el.textContent=`Preparando escudos… ${n} de ${t}`});const E={lista:r.escudos||[],alias:Object.assign({},S.escudos?.alias||{})};S.escudos=E;cacheLocal();await writeDoc("config/escudos",E);render();toast(`${E.lista.length} escudos importados`+(r.omitidos&&r.omitidos.length?` · sin usar: ${r.omitidos.slice(0,3).join(", ")}`:""))}
+      catch(x){const m={carpeta_invalida:"Escribe el nombre o el enlace de la carpeta.",carpeta_no_encontrada:"No se encontró la carpeta en tu Drive.",server_unavailable:"Sin señal o el puente no respondió.",sin_permiso:"Solo el DT puede importar escudos."}[x&&x.code];toast(m||("No se pudo importar: "+((x&&(x.message||x.code))||"error")))}
+      el.disabled=false;el.textContent="Importar escudos desde Drive";break}
     case "saveCortos":{const o={};document.querySelectorAll("[data-cor]").forEach(i=>{const v=i.value.trim();if(v)o[i.dataset.cor]=v});S.cortos=o;cacheLocal();try{await writeDoc("config/cortos",{map:o})}catch(e){}toast("Nombres guardados.");break}
     case "saveStaff":{const o={};document.querySelectorAll("[data-cfg]").forEach(i=>o[i.dataset.cfg]=i.value.trim());S.staff=o;cacheLocal();try{await writeDoc("config/staff",o)}catch(e){}toast("Cuerpo técnico guardado.");break}
     case "openMatch":{S.estado={actual:id};try{await writeDoc("config/estado",S.estado)}catch(e){}subscribeMatch(id);S.view="cierre";render();window.scrollTo(0,0);toast("Partido abierto.");break}
@@ -1249,6 +1278,8 @@ document.addEventListener("input",ev=>{
     else if(k==="c_txt"){c[t.dataset.k]=v}
     saveCierre();return}
   const d=S.draft;if(!d)return;
+  if(k==="escQ"){const q=escKey(v);document.querySelectorAll("#escGrid [data-nm]").forEach(b=>{b.hidden=!!q&&!b.dataset.nm.includes(q)});return}
+  if(k==="rival"&&S.draft){S.draft.rival=v;saveDraft();const em=$("#escMini");if(em)em.innerHTML=rivalCrest(v,20);return}
   if(k.startsWith("st_")){d.staff=d.staff||defaultStaff();d.staff[k.slice(3)]=v;saveDraft();return}
   if(k==="pickSheet"){const m=S.sheetMatches.find(x=>String(x.row)===v);if(m){Object.assign(d,{row:m.row,ptId:m.ptId,fecha:isoFromDmy(m.fecha),comp:m.comp,rival:m.rival,loc:m.loc||"Local",micro:m.micro||"",dur:Number(m.dur)||80,cupo:cupoFor(m.comp),maxCambios:reglasFor(m.comp).max,reingreso:reglasFor(m.comp).re})}else{d.row=null;d.ptId=null}saveDraft();render();return}
   if(k==="comp"){d.comp=v;d.cupo=cupoFor(v);const rg=reglasFor(v);d.maxCambios=rg.max;d.reingreso=rg.re;saveDraft();render();return}
@@ -1292,6 +1323,7 @@ render();
     db.collection("partidos").onSnapshot(q=>{S.allMatches=q.docs.map(d=>Object.assign({_id:d.id},cl(d.data())));if(S.view==="ajustes")render()},()=>{});
     db.doc("config/marca").onSnapshot(s=>{if(s.exists){S.marca=cl(s.data());cacheLocal();render()}},()=>{});
     db.doc("config/hoja").onSnapshot(s=>{if(s.exists){S.hoja=cl(s.data());cacheLocal();renderBoard()}},()=>{});
+    db.doc("config/escudos").onSnapshot(s=>{if(s.exists){const e=cl(s.data());S.escudos={lista:e.lista||[],alias:e.alias||{}};cacheLocal();render()}},()=>{});
     db.doc("config/cortos").onSnapshot(s=>{if(s.exists){S.cortos=cl(s.data()).map||{};cacheLocal();if(S.view==="informe"||S.view==="ajustes")render()}},()=>{});
     db.doc("config/staff").onSnapshot(s=>{if(s.exists){S.staff=cl(s.data());cacheLocal()}},()=>{});
     db.doc("config/formaciones").onSnapshot(s=>{if(s.exists){S.forms=cl(s.data()).map||{};cacheLocal()}},()=>{});

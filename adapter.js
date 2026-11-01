@@ -249,6 +249,61 @@ window.importarCarpetaDrive = async link => {
   setTimeout(pedirFotos, 100);
   return r;
 };
+// Escudos de rivales: se traen de la carpeta de Drive y se dejan listos (máx. 256 px, fondo transparente, sin bordes sobrantes).
+function normalizarEscudo(data) {
+  return new Promise(res => {
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const k = Math.min(1, 256 / Math.max(im.width, im.height)); const w = Math.max(1, Math.round(im.width * k)), h = Math.max(1, Math.round(im.height * k));
+        const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.drawImage(im, 0, 0, w, h);
+        const d = g.getImageData(0, 0, w, h), px = d.data; let borde = 0, transp = 0, blanco = 0;
+        const mirar = i => { borde++; if (px[i + 3] < 250) transp++; else if (Math.min(px[i], px[i + 1], px[i + 2]) > 228) blanco++; };
+        for (let x = 0; x < w; x++) { mirar(x * 4); mirar(((h - 1) * w + x) * 4); }
+        for (let y = 0; y < h; y++) { mirar(y * w * 4); mirar((y * w + w - 1) * 4); }
+        let cambio = k < 1 || !/^data:image\/png/.test(data);
+        // Sin transparencia y con borde blanco (JPG o miniatura): se quita el blanco que toca los bordes.
+        if (transp / borde < 0.05 && blanco / borde > 0.7) {
+          const vis = new Uint8Array(w * h), cola = [];
+          const es = p => Math.min(px[p * 4], px[p * 4 + 1], px[p * 4 + 2]) > 228 && px[p * 4 + 3] > 0;
+          const add = p => { if (!vis[p] && es(p)) { vis[p] = 1; cola.push(p); } };
+          for (let x = 0; x < w; x++) { add(x); add((h - 1) * w + x); }
+          for (let y = 0; y < h; y++) { add(y * w); add(y * w + w - 1); }
+          while (cola.length) { const p = cola.pop(), x = p % w, y = (p - x) / w; px[p * 4 + 3] = 0; if (x > 0) add(p - 1); if (x < w - 1) add(p + 1); if (y > 0) add(p - w); if (y < h - 1) add(p + w); }
+          g.putImageData(d, 0, 0); cambio = true;
+        }
+        // Recorte de márgenes vacíos
+        const d2 = g.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d2[(y * w + x) * 4 + 3] > 12) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (x1 >= 0 && (x0 > 0 || y0 > 0 || x1 < w - 1 || y1 < h - 1)) {
+          const c2 = document.createElement("canvas"); c2.width = x1 - x0 + 1; c2.height = y1 - y0 + 1; c2.getContext("2d").drawImage(c, x0, y0, c2.width, c2.height, 0, 0, c2.width, c2.height);
+          return res({ data: c2.toDataURL("image/png"), cambio: true });
+        }
+        res({ data: cambio ? c.toDataURL("image/png") : data, cambio });
+      } catch (e) { res({ data, cambio: false }); }
+    };
+    im.onerror = () => res({ data, cambio: false });
+    im.src = data;
+  });
+}
+window.importarEscudosDrive = async (carpeta, progreso) => {
+  const r = await puente({ op: "importarEscudos", carpeta: carpeta || "ESCUDOS" }, 330000);
+  const ids = (r.escudos || []).map(e => e.id);
+  ids.forEach(id => { delete fotos[id]; idbDel(id); });
+  for (let i = 0; i < ids.length; i += 8) {
+    const lote = ids.slice(i, i + 8);
+    const l = await puente({ op: "fotoLeer", ids: lote }, 90000);
+    for (const id of lote) {
+      const orig = (l.fotos || {})[id]; if (!orig) continue;
+      const n = await normalizarEscudo(orig);
+      if (n.cambio) { try { await puente({ op: "fotoGuardar", id, data: n.data }, 60000); } catch (e) {} }
+      fotos[id] = n.data; idbPut(id, n.data);
+    }
+    if (progreso) try { progreso(Math.min(ids.length, i + 8), ids.length); } catch (e) {}
+  }
+  if (typeof window.render === "function") try { window.render(); } catch (e) {}
+  return r;
+};
 window.invitacionAsistente = async () => {
   const r = await puente({ op: "invitacion" });
   const tok = btoa(unescape(encodeURIComponent(JSON.stringify({ url: cfg.url, clave: r.claveAsistente }))));
