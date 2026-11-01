@@ -720,10 +720,10 @@ function viewAfic(){
   const evs=activeEvents().filter(e=>e.tipo!=="formacion").slice().reverse();
   const info=[m.competicion,m.fecha?dmy(m.fecha):"",m.hora,m.lugar].filter(Boolean).join(" · ");
   return `<section class="sec"><div class="clock ${c.over?"over":""}"><span class="t num" data-clock>${clockText()}</span><span class="p" data-clocklabel>${esc(c.label)}</span></div>${info?`<p class="hint" style="text-align:center">${esc(info)}</p>`:""}</section>
+  <section class="sec"><h3>Minuto a minuto</h3>${evs.length?`<ul class="tl">${evs.map(e=>`<li><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}</span></li>`).join("")}</ul>`:'<p class="hint">Aquí aparecerán los goles, tarjetas y cambios.</p>'}</section>
   ${m.mvp&&m.reloj?.fin2?`<section class="sec" style="align-items:center;text-align:center"><h3>Jugador del partido</h3>${avatar(m.mvp,"mvp")}<strong>${esc(player(m.mvp)?.nombre||"")}</strong></section>`:""}
   <section class="sec"><h3>En cancha · ${esc(st.formacion||"")}</h3>${pitchHtml(st.coords,st.slots,{mode:"view",state:st})}</section>
   ${bench.length?`<section class="sec"><h3>Suplentes</h3><div class="plist">${bench.map(id=>{const p=player(id);const mn=liveMins(st,id);return `<div class="prow">${avatar(id)}<span class="meta"><span class="nm">${esc(p?.nombre||id)}</span><span class="ps">${esc([p?.dorsal?"#"+p.dorsal:"",mn?mn+"' jugados":""].filter(Boolean).join(" · "))}</span></span></div>`}).join("")}</div></section>`:""}
-  <section class="sec"><h3>Minuto a minuto</h3>${evs.length?`<ul class="tl">${evs.map(e=>`<li><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}</span></li>`).join("")}</ul>`:'<p class="hint">Aquí aparecerán los goles, tarjetas y cambios.</p>'}</section>
   <p class="hint" style="text-align:center">La página se actualiza sola.</p>${salir}`;
 }
 function viewVivo(){
