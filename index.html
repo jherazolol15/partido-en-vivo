@@ -515,6 +515,7 @@ async function loadRosterFromSheet(){
   const iCup=cf.findIndex(r=>r&&r[0]==="Cupos por competición");
   if(iCup>=0)cf.slice(iCup+1).forEach(r=>{if(r&&r[0]){const n=Number(r[1]);comps[r[0]]=isFinite(n)&&n>0?n:null}});
   const zonas=z.map(r=>r[0]).filter(Boolean);
+  (S.roster?.jugadores||[]).filter(j=>j.invitado&&!jug.some(x=>x.id===j.id)).forEach(j=>jug.push(j));
   S.roster={jugadores:jug,comps:Object.keys(comps).length?comps:COMPS_DEFAULT,zonas:zonas.length?zonas:ZONAS_DEFAULT,duracion,actualizado:Date.now()};
   cacheLocal();
   try{await writeDoc("config/plantilla",S.roster)}catch(e){}
@@ -629,15 +630,16 @@ function viewPartido(){
   </div></section>`;
   html+=`<section class="sec"><h2>Cuerpo técnico presente</h2><p class="hint">Viene de Ajustes; cambia solo lo de este partido.</p><div class="grid2">${STAFF.map(([k,l])=>`<label class="f">${l}<input id="st_${k}" data-inp="st_${k}" value="${esc(d.staff[k]||"")}"></label>`).join("")}</div></section>`;
   // Convocatoria
-  const groups=[...new Set(S.roster.jugadores.map(j=>String(j.grupo||"")))].sort();
+  const groups=[...new Set(S.roster.jugadores.map(j=>String(j.grupo||"")))].sort((a,b)=>(a==="Invitado")-(b==="Invitado")||a.localeCompare(b));
   html+=`<section class="sec"><div class="row" style="justify-content:space-between"><h2>Convocatoria</h2><span class="pill num" style="background:${over?"var(--danger)":"var(--surface-2)"};color:${over?"#fff":"var(--ink)"}">${nConv}${d.cupo?" / "+d.cupo:" · sin tope"}</span></div>
    ${over?`<div class="banner err">Hay ${nConv-d.cupo} convocado(s) por encima del cupo de ${esc(d.comp)}.</div>`:""}
    <p class="hint">Toca para convocar. Lesionados y suspendidos aparecen marcados. El número verde es el puntaje (0-100) y el ranking de tu pestaña Convocatoria; la decisión es tuya.</p>`;
   for(const g of groups){
     const list=S.roster.jugadores.filter(j=>String(j.grupo||"")===g&&j.estado!=="Inactivo");
     if(!list.length)continue;
-    html+=`${groups.length>1?`<h3>${esc(/^[AB]$/.test(g)?"Grupo "+g:(g||"Sin grupo"))}</h3>`:""}<div class="plist">${list.map(j=>{const on=d.convocados.includes(j.id);return `<button class="prow ${on?"on":""}" data-act="conv" data-id="${j.id}">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j)||"Sin posición")}</span></span></span>${dispChip(j)}${j.puntaje?`<span class="scoreb" title="Puntaje de convocatoria">${esc(j.puntaje)}<small>#${esc(j.ranking)}</small></span>`:""}<span class="tick">${on?"✓":""}</span></button>`}).join("")}</div>`;
-  }
+    html+=`${groups.length>1?`<h3>${esc(g==="Invitado"?"Invitados de otra categoría":/^[AB]$/.test(g)?"Grupo "+g:(g||"Sin grupo"))}</h3>`:""}<div class="plist">${list.map(j=>{const on=d.convocados.includes(j.id);return `<button class="prow ${on?"on":""}" data-act="conv" data-id="${j.id}">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j)||"Sin posición")}</span></span></span>${dispChip(j)}${j.puntaje?`<span class="scoreb" title="Puntaje de convocatoria">${esc(j.puntaje)}<small>#${esc(j.ranking)}</small></span>`:""}<span class="tick">${on?"✓":""}</span></button>`}).join("")}</div>`;
+  }  html+=`<div class="row"><button class="btn sm" data-act="invAdd" data-to="draft">+ Agregar jugador invitado</button>${S.roster.jugadores.some(j=>j.invitado)?'<button type="button" class="lnk" data-act="invList">Editar invitados</button>':""}</div><p class="hint">Para jugadores de otra categoría: se registran sus minutos, goles, asistencias y tarjetas en el informe, sin mezclarse con las estadísticas de la plantilla en tu hoja.</p>`;
+
   html+=`</section>`;
   // Alineación
   const fa=formsAll();const coords=draftCoords(d);
@@ -746,7 +748,7 @@ function viewVivo(){
    <section class="sec"><div class="row" style="justify-content:space-between"><h3>En cancha · ${esc(st.formacion||"")}</h3><span class="hint">Toca un jugador</span></div>
     ${pitchHtml(st.coords,st.slots,{mode:"live",state:st})}
     <div class="quick"><button class="btn dan" data-act="golRival">Gol rival</button><button class="btn" data-act="noteFree">Nota</button><button class="btn" data-act="formChange">Formación</button><button class="btn" data-act="ctCard">Tarjeta cuerpo técnico</button></div><button class="btn wide" data-act="undoLast">Deshacer último evento</button></section>
-   <section class="sec"><div class="row" style="justify-content:space-between"><h3>Banco</h3><span class="pill num" style="background:${cambiosAgotados()?"var(--danger)":"var(--surface-2)"};color:${cambiosAgotados()?"#fff":"var(--ink)"}">Cambios ${nCambios()}${S.match.maxCambios?" / "+S.match.maxCambios:""}</span></div><div class="bench">${bench.length?bench.map(id=>`<button data-act="benchP" data-id="${id}" class="${out.has(id)?"out":""}">${avatar(id)}<span class="lb">${esc(shortName(id))}</span><span class="mn">${liveMins(st,id)}'</span></button>`).join(""):'<span class="hint">Sin suplentes.</span>'}</div></section>
+   <section class="sec"><div class="row" style="justify-content:space-between"><h3>Banco</h3><span class="pill num" style="background:${cambiosAgotados()?"var(--danger)":"var(--surface-2)"};color:${cambiosAgotados()?"#fff":"var(--ink)"}">Cambios ${nCambios()}${S.match.maxCambios?" / "+S.match.maxCambios:""}</span></div><div class="bench">${bench.length?bench.map(id=>`<button data-act="benchP" data-id="${id}" class="${out.has(id)?"out":""}">${avatar(id)}<span class="lb">${esc(shortName(id))}</span><span class="mn">${liveMins(st,id)}'</span></button>`).join(""):'<span class="hint">Sin suplentes.</span>'}</div>${S.isOwner?'<button type="button" class="lnk" data-act="invAdd" data-to="match" style="align-self:flex-start">+ Agregar jugador invitado al partido</button>':""}</section>
    ${S.isOwner?"":'<button class="btn sm" data-act="logout" style="align-self:center">Cerrar sesión en este teléfono</button>'}<section class="sec"><h3>Eventos</h3>${evs.length?`<ul class="tl">${evs.map(evRow).join("")}</ul>`:'<p class="hint">Los goles, tarjetas y cambios aparecerán aquí con su minuto.</p>'}</section>`;
 }
 function evIcon(e){return {gol:"⚽",gol_rival:"⚽",amarilla:'<i class="card-y"></i>',roja:'<i class="card-r"></i>',cambio:"⇄",penal_atajado:"🧤",lesion:"✚",atencion:"✚",formacion:"▦",nota:"✎",amon_ct:e.color==="roja"?'<i class="card-r"></i>':'<i class="card-y"></i>'}[e.tipo]||"·"}
@@ -886,7 +888,8 @@ async function doSync(){
     }
     ptId=S.match.ptId;
     const label=`${ptId} · ${da}/${mo} vs ${m.rival}`;
-    const lab=id=>{const p=player(id);return p?id+" · "+p.nombre:id};
+    const esInv=id=>!!player(id)?.invitado;
+    const lab=id=>{const p=player(id);return p?(p.invitado?"":id+" · "+p.nombre):id};
     // duplicate guard
     const existing=await readRange("Stats_Partido!B1:B1500");
     const dup=existing.filter(r=>r&&r[0]===ptId).length;
@@ -894,7 +897,7 @@ async function doSync(){
     if(!sync.stats){
       if(dup&&!S.forceDup){S.syncing=false;S.confirmSync=false;log(`Stats_Partido ya tiene ${dup} filas de ${ptId}. No se escribió nada más para evitar duplicados. Revisa la hoja.`,true);return}
       const r0=await nextRow("Stats_Partido!A1:A1500");
-      const vals=fs.rows.map(r=>[label,null,null,null,lab(r.id),null,r.cond,r.entra,r.sale,null,r.goles,r.asist,r.am,r.ro,m.mvp===r.id?"Sí":"",(cierre().notas[r.id]||null),null,null,(player(r.id)?.pos1==="Portero"||r.gr)?r.gr:null,r.pen||null,r.obs]);
+      const vals=fs.rows.filter(r=>!esInv(r.id)).map(r=>[label,null,null,null,lab(r.id),null,r.cond,r.entra,r.sale,null,r.goles,r.asist,r.am,r.ro,m.mvp===r.id?"Sí":"",(cierre().notas[r.id]||null),null,null,(player(r.id)?.pos1==="Portero"||r.gr)?r.gr:null,r.pen||null,r.obs]);
       await gs("update_values",{range:`Stats_Partido!A${r0}:U${r0+vals.length-1}`,values:vals});
       sync.stats=stamp();await setMatch({sync});log("Stats_Partido: "+vals.length+" jugadores");
     }
@@ -905,6 +908,7 @@ async function doSync(){
       if(tl.length){
         const r0=await nextRow("Eventos!A1:A3000");
         const vals=tl.map((x,i)=>{const e=x.e;let det=e.detalle||"";if(e.tipo==="formacion")det=e.formacion||det;if(e.tipo==="amon_ct")det=(e.color==="roja"?"Roja · ":"Amarilla · ")+det;
+          const xi=[];if(e.jugador&&esInv(e.jugador))xi.push((e.tipo==="cambio"?"Sale invitado: ":"Invitado: ")+player(e.jugador).nombre);if(e.rel&&esInv(e.rel))xi.push((e.tipo==="cambio"?"Entra invitado: ":"Asistencia de invitado: ")+player(e.rel).nombre);det=[det,...xi].filter(Boolean).join(" · ");
           return ["'"+ptId+"-"+pad2(i+1),"'"+ptId,e.periodo===2?"2T":"1T",e.minuto,TIPO_TXT[e.tipo]||e.tipo,e.jugador?lab(e.jugador):"",null,e.rel?lab(e.rel):"",det,x.gf,x.gc,e.autor===S.uid?"DT":"Asistente","'"+new Date(e.ts).toLocaleString("es-CO")]});
         await gs("update_values",{range:`Eventos!A${r0}:M${r0+vals.length-1}`,values:vals});
       }
@@ -912,14 +916,14 @@ async function doSync(){
     }
     // 4. Lesiones
     if(!sync.lesiones){
-      const les=activeEvents().filter(e=>e.tipo==="lesion"&&e.jugador);
+      const les=activeEvents().filter(e=>e.tipo==="lesion"&&e.jugador&&!esInv(e.jugador));
       if(les.length){const r0=await nextRow("Lesiones!A1:A200");
         await gs("update_values",{range:`Lesiones!A${r0}:K${r0+les.length-1}`,values:les.map(e=>[lab(e.jugador),null,dateF,e.detalle||"","Lesión en partido (min. "+e.minuto+")","Partido","","",null,null,"Registrada desde la app vs "+m.rival])})}
       sync.lesiones=stamp();await setMatch({sync});log("Lesiones: "+les.length);
     }
     // 5. Sanciones
     if(!sync.sanciones){
-      const rojas=activeEvents().filter(e=>e.tipo==="roja"&&e.jugador);
+      const rojas=activeEvents().filter(e=>e.tipo==="roja"&&e.jugador&&!esInv(e.jugador));
       if(rojas.length){const r0=await nextRow("Sanciones!A1:A200");
         await gs("update_values",{range:`Sanciones!A${r0}:J${r0+rojas.length-1}`,values:rojas.map(e=>[lab(e.jugador),null,dateF,label,e.detalle||"Roja directa","",null,null,null,"Expulsión en el min. "+e.minuto+". Sanción de la Liga pendiente."])})}
       sync.sanciones=stamp();await setMatch({sync});log("Sanciones: "+rojas.length);
@@ -1277,6 +1281,21 @@ document.addEventListener("click",async ev=>{
     case "salirAfic":window.cerrarSesion&&window.cerrarSesion();break;
     case "invPadres":{el.disabled=true;try{const u=await window.invitacionPadres(false);let ok=false;try{await navigator.clipboard.writeText(u);ok=true}catch(x){}S._invP=u;render();toast(ok?"Enlace copiado: compártelo en el grupo de padres.":"Copia el enlace y compártelo en el grupo de padres.")}catch(x){toast("Se necesita señal para crear el enlace.")}el.disabled=false;break}
     case "renovarPadres":{if(!S._renP||Date.now()-S._renP>6000){S._renP=Date.now();toast("Toca de nuevo para confirmar: el enlace actual dejará de funcionar.");return}S._renP=0;el.disabled=true;try{const u=await window.invitacionPadres(true);S._invP=u;try{await navigator.clipboard.writeText(u)}catch(x){}render();toast("Enlace nuevo creado. El anterior ya no funciona.")}catch(x){toast("Se necesita señal para cambiar el enlace.")}el.disabled=false;break}
+    case "invAdd":{S._invTo=el.dataset.to||"draft";sheet(`<h2>Jugador invitado</h2><p class="hint">Jugador de otra categoría convocado para este partido. Queda guardado para volver a convocarlo cuando quieras.</p>
+       <label class="f">Nombre completo<input id="gNom" class="tin" autocomplete="off" placeholder="Ej. Ángel David Pérez Ruiz"></label>
+       <div class="grid2"><label class="f">Dorsal<input id="gDor" class="tin" inputmode="numeric" maxlength="3"></label><label class="f">Posición<select id="gPos" class="tin">${Object.entries(POSN).map(([k,v])=>`<option value="${esc(v)}">${k} · ${esc(v)}</option>`).join("")}</select></label></div>
+       <label class="f">Categoría (opcional)<input id="gCat" class="tin" placeholder="Ej. Sub-13"></label>
+       <button class="btn pri wide" data-act="invSave">${S._invTo==="match"?"Agregar al partido":"Agregar y convocar"}</button><button class="btn wide" data-act="close">Cancelar</button>`);setTimeout(()=>{const n=$("#gNom");if(n)n.focus()},50);break}
+    case "invSave":{const nom=($("#gNom").value||"").trim().replace(/\s+/g," ");if(nom.length<3){toast("Escribe el nombre del jugador.");return}
+      const ro=cl(S.roster);let n=1;while(ro.jugadores.some(j=>j.id==="INV"+pad2(n)))n++;const gid="INV"+pad2(n);
+      ro.jugadores.push({id:gid,nombre:nom,dorsal:($("#gDor").value||"").replace(/\D/g,""),pos1:$("#gPos").value,pos2:"",estado:"Activo",disp:"Disponible",grupo:"Invitado",invitado:true,categoria:($("#gCat").value||"").trim()});
+      S.roster=ro;cacheLocal();try{await writeDoc("config/plantilla",ro)}catch(e){}
+      if(S._invTo==="match"&&S.match){const cv=(S.match.convocados||[]).concat([gid]);await setMatch({convocados:cv})}
+      else{const d=S.draft;if(d&&!d.convocados.includes(gid)){d.convocados.push(gid);saveDraft()}}
+      closeSheet();render();toast(nom+(S._invTo==="match"?" agregado al partido. Ya puedes hacer el cambio desde el banco.":" convocado como invitado."));break}
+    case "invList":{const L=(S.roster?.jugadores||[]).filter(j=>j.invitado);const enUso=new Set((S.match?.convocados||[]).concat(S.draft?.convocados||[]));
+      sheet(`<h2>Invitados</h2><p class="hint">Quitar a un invitado de la lista no borra lo que registró en partidos anteriores.</p><div class="plist">${L.map(j=>`<div class="prow">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps">${esc([j.categoria,j.dorsal?"#"+j.dorsal:""].filter(Boolean).join(" · "))}</span></span>${enUso.has(j.id)?'<span class="chip ina">Convocado</span>':`<button class="btn sm" data-act="invDel" data-id="${j.id}">Quitar</button>`}</div>`).join("")}</div><button class="btn wide" data-act="close">Cerrar</button>`);break}
+    case "invDel":{const ro=cl(S.roster);ro.jugadores=ro.jugadores.filter(j=>j.id!==id);S.roster=ro;cacheLocal();try{await writeDoc("config/plantilla",ro)}catch(e){}closeSheet();render();toast("Invitado quitado de la lista.");break}
     case "saveCortos":{const o={};document.querySelectorAll("[data-cor]").forEach(i=>{const v=i.value.trim();if(v)o[i.dataset.cor]=v});S.cortos=o;cacheLocal();try{await writeDoc("config/cortos",{map:o})}catch(e){}toast("Nombres guardados.");break}
     case "saveStaff":{const o={};document.querySelectorAll("[data-cfg]").forEach(i=>o[i.dataset.cfg]=i.value.trim());S.staff=o;cacheLocal();try{await writeDoc("config/staff",o)}catch(e){}toast("Cuerpo técnico guardado.");break}
     case "openMatch":{S.estado={actual:id};try{await writeDoc("config/estado",S.estado)}catch(e){}subscribeMatch(id);S.view="cierre";render();window.scrollTo(0,0);toast("Partido abierto.");break}
