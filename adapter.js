@@ -104,13 +104,20 @@ function colRef(path) {
 const db = { doc: docRef, collection: colRef };
 
 // ---------- Ciclo de sincronización ----------
-let syncing = false, lastOk = 0, lastErr = null;
+let syncing = false, lastOk = 0, lastErr = null, ultimaApl = 0;
 // Enlace para padres: solo lectura, cada 15 s, con un resumen preparado por el puente.
 let ultimaVista = 0;
+// Aplausos: se guardan en el teléfono y viajan dentro de la misma consulta (sin llamadas extra al puente).
+let reacPend = ls.get("reac", []), reacEnv = [];
+window.reaccionar = (e, t) => { reacPend.push({ e, t, ts: Date.now() }); ls.set("reac", reacPend); notify(["local/aplausos"]); };
+window.animar = () => { if (reacPend.filter(x => x.e === "_animo").length >= 30) return false; reacPend.push({ e: "_animo", ts: Date.now() }); ls.set("reac", reacPend); notify(["local/aplausos"]); return true; };
+window.__aplausosLocal = gen => { const out = { ev: {}, animo: 0 }; reacPend.concat(reacEnv.filter(x => x.env > (gen || 0))).forEach(x => { if (x.e === "_animo") out.animo++; else { const c = out.ev[x.e] = out.ev[x.e] || {}; c[x.t] = (c[x.t] || 0) + 1; } }); return out; };
 async function syncVista() {
   if (Date.now() - ultimaVista < (window.__aficMs || 15000)) return;
   ultimaVista = Date.now();
-  const r = await puente({ op: "vista" }, 30000);
+  const lote = reacPend.slice(0, 80);
+  const r = await puente(lote.length ? { op: "vista", dev: cfg.uid, reac: lote.map(x => (x.t ? { e: x.e, t: x.t } : { e: x.e })) } : { op: "vista" }, 30000);
+  if (lote.length) { const ahora = Date.now(); reacPend = reacPend.slice(lote.length); ls.set("reac", reacPend); reacEnv = reacEnv.filter(x => ahora - x.env < 60000).concat(lote.map(x => Object.assign({}, x, { env: ahora }))); }
   const nuevo = {}, t = Date.now();
   const put = (ruta, data) => { if (data != null) nuevo[ruta] = { data, actualizado: t }; };
   put("config/estado", { actual: r.actual || null });
@@ -122,6 +129,7 @@ async function syncVista() {
     put("config/plantilla", { jugadores: r.jugadores || [] });
     put("config/fotos", { map: r.fotos || {} });
   }
+  put("local/aplausos", { on: !!r.fans, ev: (r.aplausos || {}).ev || {}, animo: (r.aplausos || {}).animo || 0, generado: r.generado || 0 });
   const tocadas = [];
   new Set(Object.keys(mirror).concat(Object.keys(nuevo))).forEach(k => {
     if (JSON.stringify(mirror[k] && mirror[k].data) !== JSON.stringify(nuevo[k] && nuevo[k].data)) tocadas.push(k);
@@ -163,6 +171,11 @@ async function sync() {
       since = Math.max(since, d.actualizado); tocadas.push(d.ruta);
     });
     if (tocadas.length) { saveMirror(); notify(tocadas); }
+    const fans = view("config/fans");
+    if (fans && fans.on && Date.now() - ultimaApl > 20000) {
+      ultimaApl = Date.now();
+      try { const v = await puente({ op: "vista" }, 30000); mirror["local/aplausos"] = { data: { on: !!v.fans, ev: (v.aplausos || {}).ev || {}, animo: (v.aplausos || {}).animo || 0, generado: v.generado || 0 }, actualizado: 0 }; saveMirror(); notify(["local/aplausos"]); } catch (e) {}
+    }
     lastOk = Date.now(); lastErr = null;
     pedirFotos();
   } catch (e) {

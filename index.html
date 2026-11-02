@@ -179,6 +179,16 @@ nav.tabs button.on{color:var(--accent);border-top-color:var(--accent)}
 .minbox .btn{min-width:50px;padding:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;max-width:90%;text-align:center}
 .tbl{overflow-x:auto}
+.tl li.wr{flex-wrap:wrap}
+.reacs{display:flex;flex-wrap:wrap;gap:4px;flex-basis:100%;padding-left:82px}
+@media (max-width:360px){.reacs{padding-left:0}}
+.reac{min-height:34px;min-width:44px;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:1rem;display:inline-flex;align-items:center;gap:4px}
+.reac b{font-size:.75rem;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.reac.on{border-color:var(--accent);background:var(--sky-soft)}
+.reac:disabled:not(.on){opacity:.55}
+.animo{font-size:1.15rem;min-height:56px}
+.animo.pop{transform:scale(1.04);transition:transform .12s}
+.aplr{display:block;color:var(--muted);font-size:.78rem}
 .av.mvp{width:110px;height:110px;border-color:var(--yellow);border-width:4px}
 .escrow{display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:500}
 .escrow .crest{margin:0}
@@ -713,6 +723,14 @@ async function saveMatch(){
 }
 
 /* ============ Vista: En vivo ============ */
+/* ============ Aplausos de los padres ============ */
+const APL=[["aplauso","👏"],["fuego","🔥"],["fuerza","💪"],["corazon","❤️"],["balon","⚽"]];
+const APL_EV={gol:1,penal_atajado:1,cambio:1};
+function aplLocal(){return typeof window.__aplausosLocal==="function"?window.__aplausosLocal(S.aplausos?.generado):{ev:{},animo:0}}
+function aplDe(eid,loc){const a=Object.assign({},(S.aplausos?.ev||{})[eid]||{});const l=(loc||aplLocal()).ev[eid]||{};for(const k in l)a[k]=(a[k]||0)+l[k];return a}
+function aplTotal(){const loc=aplLocal();let n=(S.aplausos?.animo||0)+loc.animo;const ids=new Set(Object.keys(S.aplausos?.ev||{}).concat(Object.keys(loc.ev)));ids.forEach(id=>{const a=aplDe(id,loc);for(const k in a)n+=a[k]});return n}
+function aplResumen(eid){const a=aplDe(eid);const t=APL.filter(([k])=>a[k]).map(([k,e])=>e+" "+a[k]);return t.length?`<small class="aplr">${t.join(" · ")}</small>`:""}
+
 /* ============ Vista: padres y aficionados (solo lectura) ============ */
 function viewAfic(){
   const salir=`<button class="lnk" data-act="salirAfic" style="align-self:center">Salir</button>`;
@@ -721,8 +739,13 @@ function viewAfic(){
   const onField=new Set(st.slots.filter(Boolean));const bench=(m.convocados||[]).filter(id=>!onField.has(id));
   const evs=activeEvents().filter(e=>e.tipo!=="formacion").slice().reverse();
   const info=[m.competicion,m.fecha?dmy(m.fecha):"",m.hora,m.lugar].filter(Boolean).join(" · ");
-  return `<section class="sec"><div class="clock ${c.over?"over":""}"><span class="t num" data-clock>${clockText()}</span><span class="p" data-clocklabel>${esc(c.label)}</span></div>${info?`<p class="hint" style="text-align:center">${esc(info)}</p>`:""}</section>
-  <section class="sec"><h3>Minuto a minuto</h3>${evs.length?`<ul class="tl">${evs.map(e=>`<li><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}</span></li>`).join("")}</ul>`:'<p class="hint">Aquí aparecerán los goles, tarjetas y cambios.</p>'}</section>
+  const on=!!S.aplausos?.on;const mis=LS.get("misReac",{});const loc=aplLocal();
+  const fila=e=>{const re=on&&APL_EV[e.tipo];let h=`<li class="${re?"wr":""}"><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}</span>`;
+    if(re){const a=aplDe(e.id,loc);h+=`<span class="reacs">${APL.map(([k,em])=>`<button class="reac ${mis[e.id]===k?"on":""}" data-act="reac" data-id="${esc(e.id)}" data-t="${k}" ${mis[e.id]?"disabled":""} aria-label="${k}">${em}${a[k]?`<b>${a[k]}</b>`:""}</button>`).join("")}</span>`}
+    return h+`</li>`};
+  return `<section class="sec"><div class="clock ${c.over?"over":""}"><span class="t num" data-clock>${clockText()}</span><span class="p" data-clocklabel>${esc(c.label)}</span></div>${info?`<p class="hint" style="text-align:center">${esc(info)}</p>`:""}
+   ${on?`<button class="btn pri wide animo" data-act="animo">¡Vamos Jaguares! 👏</button><p class="hint" style="text-align:center"><strong class="num" id="aplTot">${aplTotal().toLocaleString("es-CO")}</strong> aplausos para el equipo</p>`:""}</section>
+  <section class="sec"><h3>Minuto a minuto</h3>${evs.length?`<ul class="tl">${evs.map(fila).join("")}</ul>`:'<p class="hint">Aquí aparecerán los goles, tarjetas y cambios.</p>'}</section>
   ${m.mvp&&m.reloj?.fin2?`<section class="sec" style="align-items:center;text-align:center"><h3>Jugador del partido</h3>${avatar(m.mvp,"mvp")}<strong>${esc(player(m.mvp)?.nombre||"")}</strong></section>`:""}
   <section class="sec"><h3>En cancha · ${esc(st.formacion||"")}</h3>${pitchHtml(st.coords,st.slots,{mode:"view",state:st})}</section>
   ${bench.length?`<section class="sec"><h3>Suplentes</h3><div class="plist">${bench.map(id=>{const p=player(id);const mn=liveMins(st,id);return `<div class="prow">${avatar(id)}<span class="meta"><span class="nm">${esc(p?.nombre||id)}</span><span class="ps">${esc([p?.dorsal?"#"+p.dorsal:"",mn?mn+"' jugados":""].filter(Boolean).join(" · "))}</span></span></div>`}).join("")}</div></section>`:""}
@@ -771,7 +794,7 @@ function evText(e){
 }
 function evRow(e){
   const mine=S.isOwner||e.autor===S.uid;
-  return `<li class="${e.anulado?"x":""} ${e._pend?"pend":""}"><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}</span>${mine?`<button class="btn sm" data-act="${e.anulado?"restore":"undo"}" data-id="${e.id}">${e.anulado?"Restaurar":"Deshacer"}</button>`:""}</li>`;
+  return `<li class="${e.anulado?"x":""} ${e._pend?"pend":""}"><span class="m">${esc(e.minuto)}'</span><span class="ico">${evIcon(e)}</span><span class="d">${evText(e)}${S.aplausos?.on?aplResumen(e.id):""}</span>${mine?`<button class="btn sm" data-act="${e.anulado?"restore":"undo"}" data-id="${e.id}">${e.anulado?"Restaurar":"Deshacer"}</button>`:""}</li>`;
 }
 function minInput(){return `<div class="minbox"><span class="hint">Minuto</span><button class="btn" data-act="minStep" data-d="-1" type="button">−</button><input id="evMin" inputmode="numeric" value="${curMinute()}"><button class="btn" data-act="minStep" data-d="1" type="button">+</button></div>`}
 function readMin(){const v=parseInt($("#evMin")?.value,10);return isFinite(v)&&v>0?v:curMinute()}
@@ -966,7 +989,7 @@ function viewInforme(){
    ${(()=>{const usC=mk.logo?`<img class="crest" src="${blobUrl(mk.logo)}" alt="">`:"";const thC=rivalCrest(m.rival,26);
      const eqL=local?usC+esc(L):thC+esc(L),eqV=local?esc(V)+thC:esc(V)+usC;
      const tmp=m.temp!==""&&m.temp!=null?m.temp+" °C":"";
-     const hechos=[["Competición",m.competicion],["Jornada",m.jornada],["Fecha",[dmy(m.fecha),m.hora].filter(Boolean).join(" · ")],["Lugar",m.lugar],["Clima",[m.clima,tmp].filter(Boolean).join(" · ")],["Estado",estadoTxt(m)]].filter(([k,v])=>String(v??"").trim());
+     const hechos=[["Competición",m.competicion],["Jornada",m.jornada],["Fecha",[dmy(m.fecha),m.hora].filter(Boolean).join(" · ")],["Lugar",m.lugar],["Clima",[m.clima,tmp].filter(Boolean).join(" · ")],["Estado",estadoTxt(m)],["Aplausos de la afición",S.aplausos?.on&&aplTotal()?aplTotal().toLocaleString("es-CO"):""]].filter(([k,v])=>String(v??"").trim());
      return `<div class="ihd"><div class="t">${eqL}<small>Local</small></div><div class="sc num">${gl}–${gv}</div><div class="t r">${eqV}<small>Visitante</small></div></div>
      <div class="ifacts">${hechos.map(([k,v])=>`<span><b>${k}</b>${esc(v)}</span>`).join("")}</div>`})()}</section>
   <section class="sec"><h3>1 · Alineación, sistema y estadísticas</h3>${kv("Sistema",m.formacion)}
@@ -1114,6 +1137,7 @@ function viewAjustes(){
    <button class="btn wide" data-act="logout">Cerrar sesión en este teléfono</button></section>
   ${S.isOwner?`<section class="sec"><h2>Enlace para padres</h2><p class="hint">Quien abra este enlace ve el partido activo minuto a minuto: marcador, alineación, cambios, tarjetas y goles. No ve notas, valoraciones, lesiones ni datos de la hoja, y no puede anotar nada.</p>
    <button class="btn sky wide" data-act="invPadres">Copiar enlace para padres</button>${S._invP?`<label class="f">Enlace para padres<input id="invPLink" class="tin" readonly value="${esc(S._invP)}" onclick="this.select()"></label>`:""}
+   <label class="row" style="gap:10px"><input type="checkbox" data-act="toggleFans" ${S.fans&&S.fans.on?"checked":""} style="width:22px;height:22px"><span>Permitir aplausos de los padres (solo reacciones positivas, sin comentarios)</span></label>
    <button type="button" class="lnk" data-act="renovarPadres" style="align-self:flex-start">Cambiar enlace (el anterior deja de funcionar)</button></section>`:""}
   ${registroHtml()}
   ${S.match?`<section class="sec"><h2>Partido activo</h2><p class="hint">${esc(S.match.rival||"")} · ${esc(dmy(S.match.fecha))}</p><button class="btn wide" data-act="closeMatch">Cerrar partido activo</button></section>`:""}`;
@@ -1278,6 +1302,9 @@ document.addEventListener("click",async ev=>{
       try{const r=await window.importarEscudosDrive(c,(n,t)=>{el.textContent=`Preparando escudos… ${n} de ${t}`});const E={lista:r.escudos||[],alias:Object.assign({},S.escudos?.alias||{})};S.escudos=E;cacheLocal();await writeDoc("config/escudos",E);render();toast(`${E.lista.length} escudos importados`+(r.omitidos&&r.omitidos.length?` · sin usar: ${r.omitidos.slice(0,3).join(", ")}`:""))}
       catch(x){const m={carpeta_invalida:"Escribe el nombre o el enlace de la carpeta.",carpeta_no_encontrada:"No se encontró la carpeta en tu Drive.",server_unavailable:"Sin señal o el puente no respondió.",sin_permiso:"Solo el DT puede importar escudos."}[x&&x.code];toast(m||("No se pudo importar: "+((x&&(x.message||x.code))||"error")))}
       el.disabled=false;el.textContent="Importar escudos desde Drive";break}
+    case "reac":{const mis=LS.get("misReac",{});if(mis[id])return;mis[id]=el.dataset.t;LS.set("misReac",mis);window.reaccionar&&window.reaccionar(id,el.dataset.t);buzz(20);break}
+    case "animo":{const ok=window.animar&&window.animar();buzz(15);const b=$(".animo");if(b){b.classList.add("pop");setTimeout(()=>b.classList.remove("pop"),130)}if(!ok)toast("¡Gracias! Espera unos segundos para seguir aplaudiendo.");break}
+    case "toggleFans":{const on=!(S.fans&&S.fans.on);S.fans={on};try{await writeDoc("config/fans",{on})}catch(e){}render();toast(on?"Aplausos de los padres activados.":"Aplausos desactivados.");break}
     case "salirAfic":window.cerrarSesion&&window.cerrarSesion();break;
     case "invPadres":{el.disabled=true;try{const u=await window.invitacionPadres(false);let ok=false;try{await navigator.clipboard.writeText(u);ok=true}catch(x){}S._invP=u;render();toast(ok?"Enlace copiado: compártelo en el grupo de padres.":"Copia el enlace y compártelo en el grupo de padres.")}catch(x){toast("Se necesita señal para crear el enlace.")}el.disabled=false;break}
     case "renovarPadres":{if(!S._renP||Date.now()-S._renP>6000){S._renP=Date.now();toast("Toca de nuevo para confirmar: el enlace actual dejará de funcionar.");return}S._renP=0;el.disabled=true;try{const u=await window.invitacionPadres(true);S._invP=u;try{await navigator.clipboard.writeText(u)}catch(x){}render();toast("Enlace nuevo creado. El anterior ya no funciona.")}catch(x){toast("Se necesita señal para cambiar el enlace.")}el.disabled=false;break}
@@ -1367,6 +1394,8 @@ render();
     db.collection("partidos").onSnapshot(q=>{S.allMatches=q.docs.map(d=>Object.assign({_id:d.id},cl(d.data())));if(S.view==="ajustes")render()},()=>{});
     db.doc("config/marca").onSnapshot(s=>{if(s.exists){S.marca=cl(s.data());cacheLocal();render()}},()=>{});
     db.doc("config/hoja").onSnapshot(s=>{if(s.exists){S.hoja=cl(s.data());cacheLocal();renderBoard()}},()=>{});
+    db.doc("local/aplausos").onSnapshot(s=>{if(s.exists){S.aplausos=cl(s.data());if(S.viewer||S.view==="vivo"||S.view==="informe")render()}},()=>{});
+    db.doc("config/fans").onSnapshot(s=>{S.fans=s.exists?cl(s.data()):{on:false};if(S.view==="ajustes")render()},()=>{});
     db.doc("config/escudos").onSnapshot(s=>{if(s.exists){const e=cl(s.data());S.escudos={lista:e.lista||[],alias:e.alias||{}};cacheLocal();render()}},()=>{});
     db.doc("config/cortos").onSnapshot(s=>{if(s.exists){S.cortos=cl(s.data()).map||{};cacheLocal();if(S.view==="informe"||S.view==="ajustes")render()}},()=>{});
     db.doc("config/staff").onSnapshot(s=>{if(s.exists){S.staff=cl(s.data());cacheLocal()}},()=>{});
