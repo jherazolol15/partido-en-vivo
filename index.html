@@ -360,7 +360,7 @@ function shortName(id){const p=player(id);if(!p)return id||"—";const parts=p.n
 function initials(id){const p=player(id);if(!p)return "?";if(p.dorsal)return p.dorsal;const w=p.nombre.split(" ");return (w[0][0]+(w[w.length-2]||w[1]||"")[0]).toUpperCase()}
 function fotoUrl(id){const a=S.fotos[id];return a?blobUrl(a):null}
 function avatar(id,cls=""){const u=fotoUrl(id);const p=player(id);const g=p?GRP[ab(p.pos1)]:"";return `<span class="av ${g?"g-"+g:""} ${cls}">${u?`<img src="${esc(u)}" alt="">`:esc(initials(id))}</span>`}
-function dispChip(p){if(!p)return "";const d=p.disp;if(d==="Lesionado")return '<span class="chip les">Lesionado</span>';if(d==="Suspendido")return '<span class="chip sus">Suspendido</span>';if(d==="Inactivo")return '<span class="chip ina">Inactivo</span>';return ""}
+function dispChip(p){if(!p)return "";const d=p.disp;if(d==="Lesionado")return '<span class="chip les">Lesionado</span>';if(d==="Suspendido")return '<span class="chip sus">Suspendido</span>';if(d==="Inactivo")return '<span class="chip ina">Inactivo</span>';if(d==="Retirado")return '<span class="chip ina">Retirado</span>';return ""}
 function formsAll(){return Object.assign({},BASE_FORMS,S.forms||{})}
 function defaultStaff(){return Object.assign({dt:"Juan Pablo Herazo Sibaja",asistentes:"",pf:"",porteros:"",medico:"",delegado:""},S.staff||{})}
 function dorsalPre(id){const p=player(id);return p&&p.dorsal?p.dorsal+" · ":""}
@@ -661,7 +661,7 @@ function viewPartido(){
    ${over?`<div class="banner err">Hay ${nConv-d.cupo} convocado(s) por encima del cupo de ${esc(d.comp)}.</div>`:""}
    <p class="hint">Toca para convocar. Lesionados y suspendidos aparecen marcados. El número verde es el puntaje (0-100) y el ranking de tu pestaña Convocatoria; la decisión es tuya.</p>`;
   for(const g of groups){
-    const list=S.roster.jugadores.filter(j=>String(j.grupo||"")===g&&j.estado!=="Inactivo");
+    const list=S.roster.jugadores.filter(j=>String(j.grupo||"")===g&&j.estado!=="Inactivo"&&j.estado!=="Retirado");
     if(!list.length)continue;
     html+=`${groups.length>1?`<h3>${esc(g==="Invitado"?"Invitados de otra categoría":/^[AB]$/.test(g)?"Grupo "+g:(g||"Sin grupo"))}</h3>`:""}<div class="plist">${list.map(j=>{const on=d.convocados.includes(j.id);return `<button class="prow ${on?"on":""}" data-act="conv" data-id="${j.id}">${avatar(j.id)}<span class="meta"><span class="nm">${esc(j.nombre)}</span><span class="ps"><span class="ab">${esc(posLine(j)||"Sin posición")}</span></span></span>${dispChip(j)}${j.puntaje?`<span class="scoreb" title="Puntaje de convocatoria">${esc(j.puntaje)}<small>#${esc(j.ranking)}</small></span>`:""}<span class="tick">${on?"✓":""}</span></button>`}).join("")}</div>`;
   }  html+=`<div class="row"><button class="btn sm" data-act="invAdd" data-to="draft">+ Agregar jugador invitado</button>${S.roster.jugadores.some(j=>j.invitado)?'<button type="button" class="lnk" data-act="invList">Editar invitados</button>':""}</div><p class="hint">Para jugadores de otra categoría: se registran sus minutos, goles, asistencias y tarjetas en el informe, sin mezclarse con las estadísticas de la plantilla en tu hoja.</p>`;
@@ -707,7 +707,7 @@ function bindPitchDrag(){
 function candidatesFor(code,pool){
   const pos=POSN[code];
   const rank=j=>{let r=j.pos1===pos?0:(j.pos2===pos?1:2);if(j.disp&&j.disp!=="Disponible")r+=3;return r};
-  return pool.map(id=>player(id)).filter(Boolean).sort((a,b)=>rank(a)-rank(b)||a.nombre.localeCompare(b.nombre));
+  return pool.map(id=>player(id)).filter(j=>j&&j.estado!=="Retirado").sort((a,b)=>rank(a)-rank(b)||a.nombre.localeCompare(b.nombre));
 }
 function openSlotPicker(i){
   const d=S.draft;const code=draftCoords(d)[i][0];
