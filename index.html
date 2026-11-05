@@ -129,7 +129,8 @@ textarea{resize:vertical;min-height:80px}
 
 /* Pitch */
 .pitch{position:relative;width:100%;max-width:440px;margin:0 auto;aspect-ratio:68/100;border-radius:12px;overflow:hidden;
-  background:repeating-linear-gradient(180deg,var(--pitch) 0 10%,var(--pitch-2) 10% 20%);touch-action:none}
+  background:repeating-linear-gradient(180deg,var(--pitch) 0 10%,var(--pitch-2) 10% 20%);touch-action:pan-y pinch-zoom}
+.pitch.drag-on{touch-action:none}
 .pitch .ln{position:absolute;border:2px solid var(--line);pointer-events:none}
 .tok{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;width:22%;background:none;border:0;padding:0;color:#fff}
 .tok .av{width:48px;height:48px;border-color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35)}
@@ -235,6 +236,8 @@ nav.tabs button.on{color:var(--accent);border-top-color:var(--accent)}
 .lv.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .tin{width:100%;min-height:44px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);padding:8px 10px}
 .nsel{min-height:44px;border-radius:10px;border:1px solid var(--border);background:var(--surface);padding:0 8px}
+.nbtn{min-width:64px;font-weight:700;font-size:1rem;color:var(--muted)}.nbtn.on{color:var(--ink);font-family:var(--display);font-size:1.3rem;border-color:var(--accent)}
+.ngrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.ngrid .btn{min-height:56px;font-size:1.4rem;font-weight:800;padding:0}
 .star{width:44px;height:44px;border-radius:50%;border:2px solid var(--border);background:var(--surface);font-size:1.2rem;color:var(--muted);flex:none}
 .star.on{background:var(--yellow);border-color:var(--yellow);color:#3a2c00}
 .crest{width:30px;height:30px;object-fit:contain;vertical-align:middle;margin-inline:0 6px}
@@ -288,7 +291,20 @@ const BASE_FORMS = {
  "4-2-3-1":[...D4,["MCD",62,58],["MCD",38,58],["EDR",82,36],["MCO",50,38],["EIZ",18,36],["DEL",50,16]],
  "4-1-4-1":[...D4,["MCD",50,60],["EDR",85,42],["MED",62,44],["MED",38,44],["EIZ",15,42],["DEL",50,17]],
  "3-5-2":[["POR",50,90],["DEF",72,76],["DEF",50,78],["DEF",28,76],["LAD",88,50],["MCD",50,58],["MED",67,44],["MED",33,44],["LAI",12,50],["DEL",61,20],["DEL",39,20]],
- "5-3-2":[["POR",50,90],["LAD",88,66],["DEF",70,76],["DEF",50,78],["DEF",30,76],["LAI",12,66],["MED",70,48],["MCD",50,54],["MED",30,48],["DEL",61,22],["DEL",39,22]]
+ "5-3-2":[["POR",50,90],["LAD",88,66],["DEF",70,76],["DEF",50,78],["DEF",30,76],["LAI",12,66],["MED",70,48],["MCD",50,54],["MED",30,48],["DEL",61,22],["DEL",39,22]],
+ "4-4-1-1":[...D4,["EDR",84,50],["MED",61,54],["MED",39,54],["EIZ",16,50],["MCO",50,35],["DEL",50,17]],
+ "4-1-2-1-2":[...D4,["MCD",50,61],["MED",71,48],["MED",29,48],["MCO",50,36],["DEL",61,18],["DEL",39,18]],
+ "4-3-1-2":[...D4,["MED",71,54],["MCD",50,59],["MED",29,54],["MCO",50,37],["DEL",61,18],["DEL",39,18]],
+ "4-3-2-1":[...D4,["MED",71,55],["MCD",50,60],["MED",29,55],["MCO",64,36],["MCO",36,36],["DEL",50,17]],
+ "4-2-4":[...D4,["MCD",62,55],["MCD",38,55],["EDR",84,27],["DEL",61,19],["DEL",39,19],["EIZ",16,27]],
+ "4-5-1":[...D4,["EDR",85,46],["MED",67,51],["MCD",50,57],["MED",33,51],["EIZ",15,46],["DEL",50,18]],
+ "3-4-3":[["POR",50,90],["DEF",72,76],["DEF",50,78],["DEF",28,76],["LAD",86,52],["MED",61,55],["MED",39,55],["LAI",14,52],["EDR",80,25],["DEL",50,18],["EIZ",20,25]],
+ "3-2-4-1":[["POR",50,90],["DEF",72,76],["DEF",50,78],["DEF",28,76],["MCD",62,61],["MCD",38,61],["EDR",86,37],["MCO",62,39],["MCO",38,39],["EIZ",14,37],["DEL",50,17]],
+ "3-4-1-2":[["POR",50,90],["DEF",72,76],["DEF",50,78],["DEF",28,76],["LAD",86,53],["MED",61,56],["MED",39,56],["LAI",14,53],["MCO",50,37],["DEL",61,19],["DEL",39,19]],
+ "3-4-2-1":[["POR",50,90],["DEF",72,76],["DEF",50,78],["DEF",28,76],["LAD",86,53],["MED",61,56],["MED",39,56],["LAI",14,53],["MCO",64,36],["MCO",36,36],["DEL",50,17]],
+ "3-1-4-2":[["POR",50,90],["DEF",72,77],["DEF",50,79],["DEF",28,77],["MCD",50,63],["LAD",86,47],["MED",62,48],["MED",38,48],["LAI",14,47],["DEL",61,20],["DEL",39,20]],
+ "5-4-1":[["POR",50,90],["LAD",88,66],["DEF",70,76],["DEF",50,78],["DEF",30,76],["LAI",12,66],["EDR",84,46],["MED",61,51],["MED",39,51],["EIZ",16,46],["DEL",50,18]],
+ "5-2-3":[["POR",50,90],["LAD",88,66],["DEF",70,76],["DEF",50,78],["DEF",30,76],["LAI",12,66],["MED",62,52],["MED",38,52],["EDR",80,26],["DEL",50,18],["EIZ",20,26]]
 };
 const COMPS_DEFAULT = {"Liga Departamental":18,"Torneo Nacional Difútbol":16,"Torneo":null,"Amistoso":null,"Amistoso interno":null};
 const ZONAS_DEFAULT = ["Tobillo","Rodilla","Muslo posterior","Muslo anterior","Aductor","Gemelo","Cadera","Espalda","Hombro","Cabeza","Pie","Otra"];
@@ -676,7 +692,7 @@ function pitchHtml(coords,slots,opt){
     let cards="";if(st&&id&&st.st[id]){const s=st.st[id];cards=`<span class="cards">${s.am?'<i class="card-y"></i>':""}${s.am>1||s.ro?'<i class="card-r"></i>':""}</span>`}
     const act=opt.mode==="setup"?"slot":(opt.mode==="view"?"":"onfield");
     return `<button class="tok" data-act="${act}" data-i="${i}" data-id="${id||""}" style="left:${c[1]}%;top:${c[2]}%">${cards}${st&&id?`<span class="mins">${liveMins(st,id)}'</span>`:""}${id?avatar(id):`<span class="av empty">+</span>`}<span class="lb">${p?(p.dorsal?esc(p.dorsal)+" · ":"")+esc(shortName(id)):'<span class="code">'+esc(c[0])+"</span>"}</span></button>`}).join("");
-  return `<div class="pitch" id="pitch">${lines}${toks}</div>`;
+  return `<div class="pitch${S.dragMode?" drag-on":""}" id="pitch">${lines}${toks}</div>`;
 }
 
 function bindPitchDrag(){
@@ -969,7 +985,7 @@ async function doSync(){
 function cierreExtra(fs){
   const c=cierre();const played=fs.rows.filter(r=>r.mins>0);
   let h=`<section class="sec"><h2>Fases del juego</h2><p class="hint">1 = bajo · 5 = alto</p>${FASES.map(([k,l])=>{const f=c.fases[k]||{};return `<div class="fase"><div class="row" style="justify-content:space-between"><strong>${l}</strong><span class="lvl">${[1,2,3,4,5].map(n=>`<button class="lv ${f.n===n?"on":""}" data-act="faseLvl" data-k="${k}" data-n="${n}" aria-label="${l}: ${n}">${n}</button>`).join("")}</span></div><input id="fo_${k}" class="tin" data-inp="c_fobs" data-k="${k}" value="${esc(f.obs||"")}" placeholder="Observaciones y qué corregir"></div>`}).join("")}</section>`;
-  h+=`<section class="sec"><h2>Notas y destacados</h2><p class="hint">Nota de 1 a 10 (va a Stats_Partido). Marca ★ a los destacados y escribe el motivo.</p><div class="plist">${played.map(r=>{const id=r.id;const on=c.dest[id]!=null;const nv=c.notas[id]??"";return `<div class="prow" style="flex-wrap:wrap">${avatar(id)}<span class="meta"><span class="nm">${esc(dorsalPre(id)+shortName(id))}</span><span class="ps">${r.mins}'</span></span><select id="nt_${id}" class="nsel" data-inp="c_nota" data-id="${id}" aria-label="Nota de ${esc(shortName(id))}">${["",1,2,3,4,5,6,7,8,9,10].map(n=>`<option value="${n}" ${String(nv)===String(n)?"selected":""}>${n===""?"Nota":n}</option>`).join("")}</select><button class="star ${on?"on":""}" data-act="star" data-id="${id}" aria-label="Destacado">★</button>${on?`<input id="ds_${id}" class="tin" style="flex-basis:100%" data-inp="c_dest" data-id="${id}" value="${esc(c.dest[id]||"")}" placeholder="Motivo">`:""}</div>`}).join("")||'<p class="hint">Aparecen los jugadores que sumaron minutos.</p>'}</div></section>`;
+  h+=`<section class="sec"><h2>Notas y destacados</h2><p class="hint">Nota de 1 a 10 (va a Stats_Partido). Marca ★ a los destacados y escribe el motivo.</p><div class="plist">${played.map(r=>{const id=r.id;const on=c.dest[id]!=null;const nv=c.notas[id]??"";return `<div class="prow" style="flex-wrap:wrap">${avatar(id)}<span class="meta"><span class="nm">${esc(dorsalPre(id)+shortName(id))}</span><span class="ps">${r.mins}'</span></span><button type="button" class="nsel nbtn${nv!==""?" on":""}" data-act="notaPick" data-id="${id}" aria-label="Nota de ${esc(shortName(id))}">${nv!==""?esc(nv):"Nota"}</button><button class="star ${on?"on":""}" data-act="star" data-id="${id}" aria-label="Destacado">★</button>${on?`<input id="ds_${id}" class="tin" style="flex-basis:100%" data-inp="c_dest" data-id="${id}" value="${esc(c.dest[id]||"")}" placeholder="Motivo">`:""}</div>`}).join("")||'<p class="hint">Aparecen los jugadores que sumaron minutos.</p>'}</div></section>`;
   h+=`<section class="sec"><h2>Conclusiones</h2><label class="f">Qué mantener<textarea id="c_mant" data-inp="c_txt" data-k="mantener">${esc(c.mantener||"")}</textarea></label><label class="f">Qué cambiar / trabajar en la semana<textarea id="c_camb" data-inp="c_txt" data-k="cambiar">${esc(c.cambiar||"")}</textarea></label><div class="grid2"><label class="f">Próximo rival<input id="c_prox" data-inp="c_txt" data-k="proxRival" value="${esc(c.proxRival||"")}"></label><label class="f">Fecha<input type="date" id="c_proxf" data-inp="c_txt" data-k="proxFecha" value="${esc(c.proxFecha||"")}"></label></div></section>`;
   return h;
 }
@@ -1208,6 +1224,10 @@ document.addEventListener("click",async ev=>{
     case "conv":{const d=S.draft;const i=d.convocados.indexOf(id);if(i>=0){d.convocados.splice(i,1);const k=d.slots.indexOf(id);if(k>=0)d.slots[k]=null}else d.convocados.push(id);saveDraft();render();break}
     case "slot":if(S.dragMode)return;openSlotPicker(Number(el.dataset.i));break;
     case "pickSlot":{const d=S.draft;const i=Number(el.dataset.i);if(id){const k=d.slots.indexOf(id);if(k>=0&&k!==i)d.slots[k]=d.slots[i];if(!d.convocados.includes(id))d.convocados.push(id)}d.slots[i]=id||null;saveDraft();closeSheet();render();break}
+    case "notaPick":{const id=el.dataset.id,nv=cierre().notas[id];sheet(`<h3>Nota de ${esc(dorsalPre(id)+shortName(id))}</h3><p class="hint">De 1 a 10. Va a Stats_Partido.</p>
+      <div class="ngrid">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button class="btn ${nv===n?"pri":""}" data-act="notaSet" data-id="${id}" data-v="${n}">${n}</button>`).join("")}</div>
+      <div class="row"><button class="btn wide" data-act="notaSet" data-id="${id}" data-v="">Quitar nota</button><button class="btn wide" data-act="close">Cancelar</button></div>`);break}
+    case "notaSet":{const c=cierre(),n=parseInt(el.dataset.v,10);c.notas[el.dataset.id]=n>0?n:null;saveCierre(true);closeSheet();render();break}
     case "toggleDrag":S.dragMode=!S.dragMode;render();break;
     case "resetCoords":S.draft.coords=null;saveDraft();render();break;
     case "saveForm":sheet(`<h3>Guardar formación propia</h3><label class="f">Nombre<input id="formName" maxlength="24" placeholder="Ej. 4-4-2 rombo"></label><div class="row"><button class="btn pri" style="flex:1" data-act="saveFormGo">Guardar</button><button class="btn" data-act="close">Cancelar</button></div>`);break;
