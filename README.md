@@ -1,9 +1,5 @@
-# Partido en vivo · Jaguares de Córdoba
+# Partido en vivo (retirado)
 
-App web para registrar partidos en tiempo real desde el teléfono: convocatoria, alineación, eventos en vivo, cierre e informe.
+Esta app ahora es parte de **SIGE Jaguares**: https://jherazolol15.github.io/sige-jaguares/
 
-- Inicio de sesión con Google; solo acceden el DT y los asistentes que él autoriza.
-- Los datos viven en Firebase (protegidos por reglas de seguridad) y en la hoja de Google del DT. **Este repositorio solo contiene código.**
-- Se instala como app en el teléfono y abre sin señal.
-
-Código generado a partir de un repositorio privado de desarrollo; no editar aquí directamente.
+Desde el 10/11/2026 (v4.16, etapa 7) esta página redirige a la app nueva y conserva los enlaces de padres (`#ver=`, que entran como invitados) y del asistente (`#inv=`). El service worker borra la caché vieja y se da de baja.

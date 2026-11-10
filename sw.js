@@ -1,14 +1,10 @@
-// Guarda la app en el teléfono para que abra sin señal.
-const CACHE = "pev-v30-1";
-const CORE = ["./", "index.html", "adapter.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
-self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE).then(() => c.add("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js").catch(() => {}))).then(() => self.skipWaiting())); });
-self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith("pev-") && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
-self.addEventListener("fetch", e => {
-  const u = new URL(e.request.url);
-  if (e.request.method !== "GET") return;
-  const cacheable = u.origin === location.origin || u.hostname === "www.gstatic.com" || u.hostname === "cdnjs.cloudflare.com" || u.hostname.endsWith("fonts.googleapis.com") || u.hostname.endsWith("fonts.gstatic.com");
-  if (!cacheable) return;
-  // Red primero para la app (para recibir versiones nuevas); caché si no hay señal.
-  e.respondWith(fetch(e.request, u.origin === location.origin ? { cache: "no-cache" } : undefined).then(r => { if (r.ok || r.type === "opaque") { const cp = r.clone(); caches.open(CACHE).then(c => c.put(e.request, cp)); } return r; })
-    .catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || (e.request.mode === "navigate" ? caches.match("index.html") : Response.error()))));
-});
+// v4.16 · Etapa 7: service worker de retiro. Borra la caché de la app vieja, se da de baja y recarga las ventanas
+// abiertas, que ahora reciben la página de redirección hacia /sige-jaguares/.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", e => e.waitUntil((async () => {
+  const ks = await caches.keys();
+  await Promise.all(ks.filter(k => !/^sige4/.test(k)).map(k => caches.delete(k)));
+  await self.registration.unregister();
+  const cs = await self.clients.matchAll({ type: "window" });
+  cs.forEach(c => { try { c.navigate(c.url); } catch (x) {} });
+})()));
